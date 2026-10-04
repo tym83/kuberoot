@@ -36,6 +36,9 @@ func (bootEntryStorage) NamespaceScoped() bool   { return false }
 func (bootEntryStorage) GetSingularName() string { return "bootentry" }
 
 func (bootEntryStorage) snapshot(context.Context) (map[string]runtime.Object, error) {
+	if upgrade.CurrentSlot() == "" {
+		return map[string]runtime.Object{}, nil // a live or development system has no slots
+	}
 	entries, err := upgrade.Entries()
 	if err != nil {
 		return nil, apierrors.NewServiceUnavailable(err.Error())

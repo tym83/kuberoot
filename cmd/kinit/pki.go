@@ -81,7 +81,34 @@ func createPKI(node nodeInfo) error {
 			return fmt.Errorf("issue %s: %w", s.file, err)
 		}
 	}
+	if err := createAggregationPKI(ca); err != nil {
+		return err
+	}
 	return createNodePKI(node)
+}
+
+// createAggregationPKI lets the cluster API server reach the node API: the
+// front proxy identity it forwards requests with, a serving certificate the
+// cluster CA vouches for, and the node API's own identity for delegated checks.
+func createAggregationPKI(clusterCA *authority) error {
+	frontProxy, err := loadOrCreateAuthority("front-proxy-ca", "kuberoot-front-proxy-ca")
+	if err != nil {
+		return err
+	}
+	client := []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
+	if err := frontProxy.issue(certSpec{file: "front-proxy-client", commonName: "front-proxy-client", usages: client}); err != nil {
+		return err
+	}
+	for _, s := range []certSpec{
+		{file: "node-api-cluster", commonName: nodeAPIServiceDNS, usages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+			dnsNames: []string{nodeAPIServiceDNS, "kuberoot-node.kube-system.svc.cluster.local"}},
+		{file: "node-api-delegation", commonName: "kuberoot:node-api", usages: client},
+	} {
+		if err := clusterCA.issue(s); err != nil {
+			return fmt.Errorf("issue %s: %w", s.file, err)
+		}
+	}
+	return nil
 }
 
 // createNodePKI issues the node's own trust root, separate from the cluster's:

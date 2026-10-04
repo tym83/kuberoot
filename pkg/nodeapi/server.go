@@ -4,18 +4,26 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apiserver/pkg/authentication/authenticator"
+	"k8s.io/apiserver/pkg/authentication/request/headerrequest"
+	"k8s.io/apiserver/pkg/authentication/request/union"
 	"k8s.io/apiserver/pkg/authentication/request/x509"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
+	"k8s.io/apiserver/pkg/authorization/authorizerfactory"
+	authorizerunion "k8s.io/apiserver/pkg/authorization/union"
 	openapinamer "k8s.io/apiserver/pkg/endpoints/openapi"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 	basecompatibility "k8s.io/component-base/compatibility"
 
 	"github.com/tym83/kuberoot/pkg/apis/node"
@@ -34,6 +42,13 @@ type Options struct {
 	KeyFile    string
 	ClientCA   string
 	Kubeconfig map[string]string // name -> file of cluster credentials to hand out
+
+	// Aggregation into the cluster API server; all optional, the node API
+	// works standalone without them.
+	RequestHeaderCA   string // front proxy CA the cluster API server forwards requests with
+	ClusterCertFile   string // serving certificate signed by the cluster CA, chosen by SNI
+	ClusterKeyFile    string
+	ClusterKubeconfig string // identity for SubjectAccessReviews against the cluster
 }
 
 var (
@@ -61,13 +76,9 @@ func Run(ctx context.Context, o Options) error {
 		return fmt.Errorf("serving: %w", err)
 	}
 
-	ca, err := dynamiccertificates.NewDynamicCAContentFromFile("node-client-ca", o.ClientCA)
-	if err != nil {
-		return fmt.Errorf("client CA: %w", err)
+	if err := configureAuth(cfg, o); err != nil {
+		return err
 	}
-	cfg.SecureServing.ClientCA = ca // makes the TLS handshake ask for a client certificate
-	cfg.Authentication.Authenticator = x509.NewDynamic(ca.VerifyOptions, x509.CommonNameUserConversion)
-	cfg.Authorization.Authorizer = authorizer.AuthorizerFunc(authorize)
 	genericapiserver.AuthorizeClientBearerToken(cfg.LoopbackClientConfig, &cfg.Authentication, &cfg.Authorization)
 
 	namer := openapinamer.NewDefinitionNamer(scheme)
@@ -104,7 +115,77 @@ func Run(ctx context.Context, o Options) error {
 	return server.PrepareRun().RunWithContext(ctx)
 }
 
-// authorize lets node admins do everything and everyone else nothing.
+// configureAuth accepts two kinds of callers: node admins with a certificate of
+// the node CA, and cluster users forwarded by the cluster API server, whose
+// permissions the cluster's RBAC decides.
+func configureAuth(cfg *genericapiserver.RecommendedConfig, o Options) error {
+	nodeCA, err := dynamiccertificates.NewDynamicCAContentFromFile("node-client-ca", o.ClientCA)
+	if err != nil {
+		return fmt.Errorf("client CA: %w", err)
+	}
+	authenticators := []authenticator.Request{x509.NewDynamic(nodeCA.VerifyOptions, x509.CommonNameUserConversion)}
+	authorizers := []authorizerunion.NamedAuthorizer{{AuthorizerName: "node-admins", Authorizer: authorizer.AuthorizerFunc(authorize)}}
+	clientCAs := []dynamiccertificates.CAContentProvider{nodeCA}
+
+	if o.RequestHeaderCA != "" {
+		frontProxy, err := dynamiccertificates.NewDynamicCAContentFromFile("front-proxy-ca", o.RequestHeaderCA)
+		if err != nil {
+			return fmt.Errorf("request header CA: %w", err)
+		}
+		clientCAs = append(clientCAs, frontProxy)
+		authenticators = append(authenticators, headerrequest.NewDynamicVerifyOptionsSecure(
+			frontProxy.VerifyOptions,
+			headerrequest.StaticStringSlice{"front-proxy-client"},
+			headerrequest.StaticStringSlice{"X-Remote-User"},
+			headerrequest.StaticStringSlice{"X-Remote-Uid"},
+			headerrequest.StaticStringSlice{"X-Remote-Group"},
+			headerrequest.StaticStringSlice{"X-Remote-Extra-"},
+		))
+	}
+	if o.ClusterCertFile != "" {
+		sni, err := dynamiccertificates.NewDynamicSNIContentFromFiles("cluster-serving", o.ClusterCertFile, o.ClusterKeyFile)
+		if err != nil {
+			return fmt.Errorf("cluster serving certificate: %w", err)
+		}
+		cfg.SecureServing.SNICerts = append(cfg.SecureServing.SNICerts, sni)
+	}
+	if o.ClusterKubeconfig != "" {
+		delegated, err := delegatedAuthorizer(o.ClusterKubeconfig)
+		if err != nil {
+			return err
+		}
+		authorizers = append(authorizers, authorizerunion.NamedAuthorizer{AuthorizerName: "cluster", Authorizer: delegated})
+	}
+	cfg.SecureServing.ClientCA = dynamiccertificates.NewUnionCAContentProvider(clientCAs...)
+	cfg.Authentication.Authenticator = union.New(authenticators...)
+	authz, err := authorizerunion.New(authorizers...)
+	if err != nil {
+		return err
+	}
+	cfg.Authorization.Authorizer = authz
+	return nil
+}
+
+// delegatedAuthorizer asks the cluster whether a forwarded user may do something.
+// The kubeconfig may point at a cluster that is not up yet; checks fail until it is.
+func delegatedAuthorizer(kubeconfig string) (authorizer.Authorizer, error) {
+	restCfg, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		return nil, fmt.Errorf("cluster kubeconfig: %w", err)
+	}
+	client, err := kubernetes.NewForConfig(restCfg)
+	if err != nil {
+		return nil, err
+	}
+	return authorizerfactory.DelegatingAuthorizerConfig{
+		SubjectAccessReviewClient: client.AuthorizationV1(),
+		AllowCacheTTL:             10 * time.Second,
+		DenyCacheTTL:              10 * time.Second,
+		WebhookRetryBackoff:       genericoptions.DefaultAuthWebhookRetryBackoff(),
+	}.New()
+}
+
+// authorize lets node admins do everything and leaves everyone else to the cluster.
 func authorize(_ context.Context, a authorizer.Attributes) (authorizer.Decision, string, error) {
 	for _, g := range a.GetUser().GetGroups() {
 		if g == AdminGroup || g == "system:masters" {

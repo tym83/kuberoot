@@ -68,7 +68,7 @@ func boot() error {
 	}
 	serveControl()
 	startServices(node, cfg)
-	go applyAddons(cfg)
+	go applyAddons(cfg, node)
 	return nil
 }
 

@@ -19,6 +19,7 @@ const (
 	apiServer   = "https://127.0.0.1:6443"
 
 	nodeAPIServer       = "https://127.0.0.1:50000"
+	nodeAPIServiceDNS   = "kuberoot-node.kube-system.svc"
 	nodeAdminKubeconfig = "/etc/kuberoot/node-admin.kubeconfig"
 )
 
@@ -37,7 +38,7 @@ func writeNodeConfig(node nodeInfo) error {
 		"/etc/cni/net.d/10-kuberoot.conflist":  fmt.Sprintf(cniConfig, podCIDR),
 		filepath.Join(kubeDir, "kubelet.yaml"): fmt.Sprintf(kubeletConfig, pkiPath("ca.crt"), clusterDNS, pkiPath("kubelet-server.crt"), pkiPath("kubelet-server.key")),
 	}
-	for _, user := range []string{"admin", "controller-manager", "scheduler", "kube-proxy", "kubelet-client"} {
+	for _, user := range []string{"admin", "controller-manager", "scheduler", "kube-proxy", "kubelet-client", "node-api-delegation"} {
 		kc, err := kubeconfig(apiServer, "ca.crt", "kuberoot", user)
 		if err != nil {
 			return err

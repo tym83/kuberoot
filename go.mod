@@ -11,6 +11,7 @@ require (
 	golang.org/x/sys v0.48.0
 	k8s.io/apimachinery v0.37.1
 	k8s.io/apiserver v0.37.1
+	k8s.io/client-go v0.37.1
 	k8s.io/component-base v0.37.1
 	k8s.io/klog/v2 v2.140.0
 	k8s.io/kube-openapi v0.0.0-20260721132016-d427ff9ee9ad
@@ -129,7 +130,6 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	k8s.io/api v0.37.1 // indirect
-	k8s.io/client-go v0.37.1 // indirect
 	k8s.io/kms v0.37.1 // indirect
 	k8s.io/streaming v0.37.1 // indirect
 	k8s.io/utils v0.0.0-20260626114624-be93311217bd // indirect

@@ -25,6 +25,10 @@ func main() {
 	flag.StringVar(&o.KeyFile, "tls-private-key-file", "", "serving key")
 	flag.StringVar(&o.ClientCA, "client-ca-file", "", "CA that signs node admin certificates")
 	flag.StringVar(&kubeconfigs, "kubeconfigs", "", "name=path pairs of cluster credentials to serve, comma separated")
+	flag.StringVar(&o.RequestHeaderCA, "requestheader-client-ca-file", "", "front proxy CA of the cluster API server")
+	flag.StringVar(&o.ClusterCertFile, "cluster-tls-cert-file", "", "serving certificate signed by the cluster CA")
+	flag.StringVar(&o.ClusterKeyFile, "cluster-tls-private-key-file", "", "key of the cluster serving certificate")
+	flag.StringVar(&o.ClusterKubeconfig, "cluster-kubeconfig", "", "credentials for delegated authorization checks")
 	klog.InitFlags(nil)
 	flag.Parse()
 
