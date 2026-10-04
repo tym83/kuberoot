@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -32,34 +33,31 @@ type certSpec struct {
 	ips        []net.IP
 }
 
-// createPKI issues the cluster CA and every certificate the node services use.
+// createPKI keeps the cluster CA and service account key across reboots and
+// reissues every leaf certificate, since the node address may have changed.
 func createPKI(node nodeInfo) error {
 	if err := os.MkdirAll(pkiDir, 0o700); err != nil {
 		return err
 	}
-	ca, err := newAuthority("kuberoot-ca")
+	ca, err := loadOrCreateAuthority("ca", "kuberoot-ca")
 	if err != nil {
 		return err
 	}
-	if err := writePEM("ca.crt", "CERTIFICATE", ca.cert.Raw); err != nil {
-		return err
-	}
-	if err := writeKey("ca.key", ca.key); err != nil {
-		return err
-	}
-	saKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return err
-	}
-	if err := writeKey("sa.key", saKey); err != nil {
-		return err
-	}
-	saPub, err := x509.MarshalPKIXPublicKey(&saKey.PublicKey)
-	if err != nil {
-		return err
-	}
-	if err := writePEM("sa.pub", "PUBLIC KEY", saPub); err != nil {
-		return err
+	if _, err := os.Stat(pkiPath("sa.key")); os.IsNotExist(err) {
+		saKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			return err
+		}
+		if err := writeKey("sa.key", saKey); err != nil {
+			return err
+		}
+		saPub, err := x509.MarshalPKIXPublicKey(&saKey.PublicKey)
+		if err != nil {
+			return err
+		}
+		if err := writePEM("sa.pub", "PUBLIC KEY", saPub); err != nil {
+			return err
+		}
 	}
 
 	server := []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
@@ -89,11 +87,8 @@ func createPKI(node nodeInfo) error {
 // createNodePKI issues the node's own trust root, separate from the cluster's:
 // the node API exists before a cluster does and outlives it.
 func createNodePKI(node nodeInfo) error {
-	ca, err := newAuthority("kuberoot-node-ca " + node.name)
+	ca, err := loadOrCreateAuthority("node-ca", "kuberoot-node-ca "+node.name)
 	if err != nil {
-		return err
-	}
-	if err := writePEM("node-ca.crt", "CERTIFICATE", ca.cert.Raw); err != nil {
 		return err
 	}
 	for _, s := range []certSpec{
@@ -107,6 +102,34 @@ func createNodePKI(node nodeInfo) error {
 		}
 	}
 	return nil
+}
+
+// loadOrCreateAuthority reuses <file>.crt/.key when present, so credentials
+// handed out earlier stay valid after a reboot.
+func loadOrCreateAuthority(file, name string) (*authority, error) {
+	if certPEM, err := os.ReadFile(pkiPath(file + ".crt")); err == nil {
+		keyPEM, err := os.ReadFile(pkiPath(file + ".key"))
+		if err != nil {
+			return nil, err
+		}
+		pair, err := tls.X509KeyPair(certPEM, keyPEM)
+		if err != nil {
+			return nil, fmt.Errorf("load %s: %w", file, err)
+		}
+		cert, err := x509.ParseCertificate(pair.Certificate[0])
+		if err != nil {
+			return nil, err
+		}
+		return &authority{cert: cert, key: pair.PrivateKey.(crypto.Signer)}, nil
+	}
+	ca, err := newAuthority(name)
+	if err != nil {
+		return nil, err
+	}
+	if err := writePEM(file+".crt", "CERTIFICATE", ca.cert.Raw); err != nil {
+		return nil, err
+	}
+	return ca, writeKey(file+".key", ca.key)
 }
 
 func newAuthority(name string) (*authority, error) {

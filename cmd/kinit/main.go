@@ -22,7 +22,7 @@ func main() {
 	if os.Getpid() != 1 {
 		log.Fatal("must run as PID 1")
 	}
-	if _, err := os.Stat(rootImage); err == nil {
+	if isInitramfs() {
 		if err := switchRoot(); err != nil {
 			log.Fatalf("switch root: %v", err)
 		}
@@ -34,6 +34,12 @@ func main() {
 	waitForSignals()
 }
 
+// isInitramfs tells stage one from stage two: only the initramfs has /newroot.
+func isInitramfs() bool {
+	_, err := os.Stat(newRoot)
+	return err == nil
+}
+
 func boot() error {
 	if err := mountAll(); err != nil {
 		return err
@@ -42,6 +48,7 @@ func boot() error {
 	_ = unix.Uname(&uts)
 	log.Printf("kuberoot booting, kernel %s, uptime %s", unix.ByteSliceToString(uts.Release[:]), uptime())
 
+	waitForEntropy()
 	cfg := loadCmdline()
 	if err := applySysctls(); err != nil {
 		return err
@@ -63,6 +70,18 @@ func boot() error {
 	startServices(node, cfg)
 	go applyAddons(cfg)
 	return nil
+}
+
+// waitForEntropy says so on the console when the kernel random pool is not ready:
+// key generation would block silently on hardware without an RNG source.
+func waitForEntropy() {
+	buf := make([]byte, 1)
+	if _, err := unix.Getrandom(buf, unix.GRND_NONBLOCK); err != unix.EAGAIN {
+		return
+	}
+	log.Printf("waiting for the kernel random pool (no hardware RNG?)")
+	_, _ = unix.Getrandom(buf, 0)
+	log.Printf("random pool ready, uptime %s", uptime())
 }
 
 func waitForSignals() {

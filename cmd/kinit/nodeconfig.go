@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -60,6 +61,22 @@ func writeNodeConfig(node nodeInfo) error {
 		}
 	}
 	return nil
+}
+
+// persistentMachineID keeps the machine identity on the state partition when
+// there is one, so the node looks like the same machine after a reboot.
+func persistentMachineID() (string, error) {
+	const path = "/var/lib/kuberoot/machine-id"
+	if raw, err := os.ReadFile(path); err == nil {
+		return strings.TrimSpace(string(raw)), nil
+	}
+	id := make([]byte, 16)
+	_, _ = rand.Read(id)
+	machineID := hex.EncodeToString(id)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return "", err
+	}
+	return machineID, os.WriteFile(path, []byte(machineID+"\n"), 0o644)
 }
 
 // kubeconfig embeds the credentials so the file is usable off the node too.

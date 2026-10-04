@@ -3,15 +3,30 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
 
-const newRoot = "/newroot"
+const (
+	newRoot = "/newroot"
+	media   = "/media"
+
+	// StateLabel names the partition that keeps node state across reboots.
+	stateLabel = "kuberoot-state"
+)
 
 // switchRoot mounts the root filesystem image read-only, gives it writable
 // /etc, /var, /run and /tmp, moves the kernel filesystems over and execs
 // stage two from inside it, keeping PID 1.
+//
+// kuberoot.root selects the image:
+//
+//	(unset)                       /rootfs.squashfs inside the initramfs, for development
+//	PARTLABEL=<name>              a partition holding the squashfs itself (installed system)
+//	PARTLABEL=<name>:<file>       a squashfs file on a FAT partition (boot media)
 func switchRoot() error {
 	for _, m := range []mount{
 		{"proc", "/proc", "proc", 0, ""},
@@ -22,16 +37,35 @@ func switchRoot() error {
 			return fmt.Errorf("mount %s: %w", m.target, err)
 		}
 	}
-	loop, err := attachLoop(rootImage)
+	rootDev, installed, err := rootDevice(cmdlineValue("kuberoot.root"))
 	if err != nil {
 		return err
 	}
-	if err := unix.Mount(loop, newRoot, "squashfs", unix.MS_RDONLY, ""); err != nil {
+	if err := unix.Mount(rootDev, newRoot, "squashfs", unix.MS_RDONLY, ""); err != nil {
 		return fmt.Errorf("mount root image: %w", err)
 	}
 	for _, dir := range []string{"/run", "/var", "/tmp"} {
 		if err := unix.Mount("tmpfs", newRoot+dir, "tmpfs", unix.MS_NOSUID|unix.MS_NODEV, "mode=0755"); err != nil {
 			return fmt.Errorf("mount %s: %w", dir, err)
+		}
+	}
+	if installed {
+		state, err := findPartition(stateLabel, 10*time.Second)
+		if err != nil {
+			return err
+		}
+		if err := unix.Mount(state, newRoot+"/var", "ext4", unix.MS_NOSUID|unix.MS_NODEV, ""); err != nil {
+			return fmt.Errorf("mount state: %w", err)
+		}
+	}
+	// Boot media stays reachable from the running system, for the installer.
+	if isMountpoint(media) {
+		target := newRoot + "/run/kuberoot/media"
+		if err := os.MkdirAll(target, 0o755); err != nil {
+			return err
+		}
+		if err := unix.Mount(media, target, "", unix.MS_MOVE, ""); err != nil {
+			return fmt.Errorf("move media: %w", err)
 		}
 	}
 	// /etc stays the image's /etc underneath; node-specific files land in a tmpfs upper layer.
@@ -63,6 +97,31 @@ func switchRoot() error {
 		return err
 	}
 	return unix.Exec("/usr/sbin/kinit", []string{"kinit"}, os.Environ())
+}
+
+// rootDevice resolves kuberoot.root to a block device holding the squashfs root,
+// and reports whether it is an installed system with a state partition.
+func rootDevice(spec string) (dev string, installed bool, err error) {
+	if spec == "" {
+		dev, err = attachLoop(rootImage)
+		return dev, false, err
+	}
+	label, file, onMedia := strings.Cut(strings.TrimPrefix(spec, "PARTLABEL="), ":")
+	part, err := findPartition(label, 30*time.Second)
+	if err != nil {
+		return "", false, err
+	}
+	if !onMedia {
+		return part, true, nil
+	}
+	if err := os.MkdirAll(media, 0o755); err != nil {
+		return "", false, err
+	}
+	if err := unix.Mount(part, media, "vfat", unix.MS_RDONLY, ""); err != nil {
+		return "", false, fmt.Errorf("mount boot media: %w", err)
+	}
+	dev, err = attachLoop(filepath.Join(media, file))
+	return dev, false, err
 }
 
 // attachLoop binds a read-only loop device to the given image file.

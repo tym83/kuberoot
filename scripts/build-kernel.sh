@@ -9,7 +9,7 @@ KVER=$(cat kernel/VERSION)
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 
 case "$ARCH" in
-  arm64) KARCH=arm64; IMAGE=arch/arm64/boot/Image; CROSS= ;;
+  arm64) KARCH=arm64; IMAGE=arch/arm64/boot/vmlinuz.efi; CROSS= ;;
   amd64) KARCH=x86_64; IMAGE=arch/x86/boot/bzImage; CROSS=x86_64-linux-gnu- ;;
   *) echo "unknown arch $ARCH" >&2; exit 1 ;;
 esac
@@ -23,7 +23,7 @@ docker run --rm \
   -v "$ROOT/kernel:/cfg:ro" \
   -v "$ROOT/out/$ARCH:/out" \
   -e KVER="$KVER" -e KARCH="$KARCH" -e IMAGE="$IMAGE" -e CROSS_COMPILE="$CROSS" \
-  -e FRAGMENTS="$*" \
+  -e FRAGMENTS="$ARCH.config $*" \
   kuberoot-builder bash -euo pipefail -c '
     cd /work
     if [ ! -d "linux-$KVER" ]; then
@@ -33,11 +33,13 @@ docker run --rm \
     O="/work/build-$KARCH"
     make -s ARCH=$KARCH O=$O defconfig
     frags=/cfg/base.config
-    for f in $FRAGMENTS; do frags="$frags /cfg/$f"; done
+    for f in $FRAGMENTS; do [ -f "/cfg/$f" ] && frags="$frags /cfg/$f"; done
     KCONFIG_CONFIG=$O/.config scripts/kconfig/merge_config.sh -m -O $O $O/.config $frags >/dev/null
     make -s ARCH=$KARCH O=$O olddefconfig
     make -s ARCH=$KARCH O=$O -j"$(nproc)" "$(basename $IMAGE)"
-    cp "$O/$IMAGE" /out/kernel
+    cp "$O/$IMAGE" /out/vmlinuz.efi
+    # Uncompressed image for direct QEMU boot during development.
+    [ -f "$O/arch/arm64/boot/Image" ] && cp "$O/arch/arm64/boot/Image" /out/kernel || cp "$O/$IMAGE" /out/kernel
     cp "$O/.config" /out/kernel.config
   '
 echo "kernel: out/$ARCH/kernel"
