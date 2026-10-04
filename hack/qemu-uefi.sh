@@ -30,7 +30,11 @@ if [ -n "$MEDIA" ]; then
   media=(-device qemu-xhci -drive "if=none,id=usb,format=raw,file=$MEDIA" -device usb-storage,drive=usb,bootindex=0)
 fi
 
-exec "${machine[@]}" -smp 4 -m 4096 -nographic -no-reboot \
+# Upgrade tests need real reboots; installs exit on reboot so the media can be pulled.
+noreboot=-no-reboot
+[ -n "${REBOOT:-}" ] && noreboot=
+
+exec "${machine[@]}" -smp 4 -m 4096 -nographic $noreboot \
   -drive "if=none,id=disk,format=raw,file=$DISK" -device virtio-blk-pci,drive=disk,bootindex=1 \
   ${media[@]+"${media[@]}"} \
   -netdev user,id=n0,hostfwd=tcp::6443-:6443,hostfwd=tcp::50000-:50000 \

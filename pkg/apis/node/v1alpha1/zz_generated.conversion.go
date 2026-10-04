@@ -36,6 +36,46 @@ func init() {
 // RegisterConversions adds conversion functions to the given scheme.
 // Public to allow building arbitrary schemes.
 func RegisterConversions(s *runtime.Scheme) error {
+	if err := s.AddGeneratedConversionFunc((*BootEntry)(nil), (*node.BootEntry)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_BootEntry_To_node_BootEntry(a.(*BootEntry), b.(*node.BootEntry), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.BootEntry)(nil), (*BootEntry)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_BootEntry_To_v1alpha1_BootEntry(a.(*node.BootEntry), b.(*BootEntry), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*BootEntryList)(nil), (*node.BootEntryList)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_BootEntryList_To_node_BootEntryList(a.(*BootEntryList), b.(*node.BootEntryList), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.BootEntryList)(nil), (*BootEntryList)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_BootEntryList_To_v1alpha1_BootEntryList(a.(*node.BootEntryList), b.(*BootEntryList), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*BootEntrySpec)(nil), (*node.BootEntrySpec)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_BootEntrySpec_To_node_BootEntrySpec(a.(*BootEntrySpec), b.(*node.BootEntrySpec), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.BootEntrySpec)(nil), (*BootEntrySpec)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_BootEntrySpec_To_v1alpha1_BootEntrySpec(a.(*node.BootEntrySpec), b.(*BootEntrySpec), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*BootEntryStatus)(nil), (*node.BootEntryStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_BootEntryStatus_To_node_BootEntryStatus(a.(*BootEntryStatus), b.(*node.BootEntryStatus), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.BootEntryStatus)(nil), (*BootEntryStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_BootEntryStatus_To_v1alpha1_BootEntryStatus(a.(*node.BootEntryStatus), b.(*BootEntryStatus), scope)
+	}); err != nil {
+		return err
+	}
 	if err := s.AddGeneratedConversionFunc((*Disk)(nil), (*node.Disk)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1alpha1_Disk_To_node_Disk(a.(*Disk), b.(*node.Disk), scope)
 	}); err != nil {
@@ -216,7 +256,141 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
+	if err := s.AddGeneratedConversionFunc((*Upgrade)(nil), (*node.Upgrade)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_Upgrade_To_node_Upgrade(a.(*Upgrade), b.(*node.Upgrade), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.Upgrade)(nil), (*Upgrade)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_Upgrade_To_v1alpha1_Upgrade(a.(*node.Upgrade), b.(*Upgrade), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*UpgradeList)(nil), (*node.UpgradeList)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_UpgradeList_To_node_UpgradeList(a.(*UpgradeList), b.(*node.UpgradeList), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.UpgradeList)(nil), (*UpgradeList)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_UpgradeList_To_v1alpha1_UpgradeList(a.(*node.UpgradeList), b.(*UpgradeList), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*UpgradeSpec)(nil), (*node.UpgradeSpec)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_UpgradeSpec_To_node_UpgradeSpec(a.(*UpgradeSpec), b.(*node.UpgradeSpec), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.UpgradeSpec)(nil), (*UpgradeSpec)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_UpgradeSpec_To_v1alpha1_UpgradeSpec(a.(*node.UpgradeSpec), b.(*UpgradeSpec), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*UpgradeStatus)(nil), (*node.UpgradeStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_UpgradeStatus_To_node_UpgradeStatus(a.(*UpgradeStatus), b.(*node.UpgradeStatus), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.UpgradeStatus)(nil), (*UpgradeStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_UpgradeStatus_To_v1alpha1_UpgradeStatus(a.(*node.UpgradeStatus), b.(*UpgradeStatus), scope)
+	}); err != nil {
+		return err
+	}
 	return nil
+}
+
+func autoConvert_v1alpha1_BootEntry_To_node_BootEntry(in *BootEntry, out *node.BootEntry, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
+	if err := Convert_v1alpha1_BootEntrySpec_To_node_BootEntrySpec(&in.Spec, &out.Spec, s); err != nil {
+		return err
+	}
+	if err := Convert_v1alpha1_BootEntryStatus_To_node_BootEntryStatus(&in.Status, &out.Status, s); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Convert_v1alpha1_BootEntry_To_node_BootEntry is an autogenerated conversion function.
+func Convert_v1alpha1_BootEntry_To_node_BootEntry(in *BootEntry, out *node.BootEntry, s conversion.Scope) error {
+	return autoConvert_v1alpha1_BootEntry_To_node_BootEntry(in, out, s)
+}
+
+func autoConvert_node_BootEntry_To_v1alpha1_BootEntry(in *node.BootEntry, out *BootEntry, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
+	if err := Convert_node_BootEntrySpec_To_v1alpha1_BootEntrySpec(&in.Spec, &out.Spec, s); err != nil {
+		return err
+	}
+	if err := Convert_node_BootEntryStatus_To_v1alpha1_BootEntryStatus(&in.Status, &out.Status, s); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Convert_node_BootEntry_To_v1alpha1_BootEntry is an autogenerated conversion function.
+func Convert_node_BootEntry_To_v1alpha1_BootEntry(in *node.BootEntry, out *BootEntry, s conversion.Scope) error {
+	return autoConvert_node_BootEntry_To_v1alpha1_BootEntry(in, out, s)
+}
+
+func autoConvert_v1alpha1_BootEntryList_To_node_BootEntryList(in *BootEntryList, out *node.BootEntryList, s conversion.Scope) error {
+	out.ListMeta = in.ListMeta
+	out.Items = *(*[]node.BootEntry)(unsafe.Pointer(&in.Items))
+	return nil
+}
+
+// Convert_v1alpha1_BootEntryList_To_node_BootEntryList is an autogenerated conversion function.
+func Convert_v1alpha1_BootEntryList_To_node_BootEntryList(in *BootEntryList, out *node.BootEntryList, s conversion.Scope) error {
+	return autoConvert_v1alpha1_BootEntryList_To_node_BootEntryList(in, out, s)
+}
+
+func autoConvert_node_BootEntryList_To_v1alpha1_BootEntryList(in *node.BootEntryList, out *BootEntryList, s conversion.Scope) error {
+	out.ListMeta = in.ListMeta
+	out.Items = *(*[]BootEntry)(unsafe.Pointer(&in.Items))
+	return nil
+}
+
+// Convert_node_BootEntryList_To_v1alpha1_BootEntryList is an autogenerated conversion function.
+func Convert_node_BootEntryList_To_v1alpha1_BootEntryList(in *node.BootEntryList, out *BootEntryList, s conversion.Scope) error {
+	return autoConvert_node_BootEntryList_To_v1alpha1_BootEntryList(in, out, s)
+}
+
+func autoConvert_v1alpha1_BootEntrySpec_To_node_BootEntrySpec(in *BootEntrySpec, out *node.BootEntrySpec, s conversion.Scope) error {
+	*out = *(*node.BootEntrySpec)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_v1alpha1_BootEntrySpec_To_node_BootEntrySpec is an autogenerated conversion function.
+func Convert_v1alpha1_BootEntrySpec_To_node_BootEntrySpec(in *BootEntrySpec, out *node.BootEntrySpec, s conversion.Scope) error {
+	return autoConvert_v1alpha1_BootEntrySpec_To_node_BootEntrySpec(in, out, s)
+}
+
+func autoConvert_node_BootEntrySpec_To_v1alpha1_BootEntrySpec(in *node.BootEntrySpec, out *BootEntrySpec, s conversion.Scope) error {
+	*out = *(*BootEntrySpec)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_node_BootEntrySpec_To_v1alpha1_BootEntrySpec is an autogenerated conversion function.
+func Convert_node_BootEntrySpec_To_v1alpha1_BootEntrySpec(in *node.BootEntrySpec, out *BootEntrySpec, s conversion.Scope) error {
+	return autoConvert_node_BootEntrySpec_To_v1alpha1_BootEntrySpec(in, out, s)
+}
+
+func autoConvert_v1alpha1_BootEntryStatus_To_node_BootEntryStatus(in *BootEntryStatus, out *node.BootEntryStatus, s conversion.Scope) error {
+	*out = *(*node.BootEntryStatus)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_v1alpha1_BootEntryStatus_To_node_BootEntryStatus is an autogenerated conversion function.
+func Convert_v1alpha1_BootEntryStatus_To_node_BootEntryStatus(in *BootEntryStatus, out *node.BootEntryStatus, s conversion.Scope) error {
+	return autoConvert_v1alpha1_BootEntryStatus_To_node_BootEntryStatus(in, out, s)
+}
+
+func autoConvert_node_BootEntryStatus_To_v1alpha1_BootEntryStatus(in *node.BootEntryStatus, out *BootEntryStatus, s conversion.Scope) error {
+	*out = *(*BootEntryStatus)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_node_BootEntryStatus_To_v1alpha1_BootEntryStatus is an autogenerated conversion function.
+func Convert_node_BootEntryStatus_To_v1alpha1_BootEntryStatus(in *node.BootEntryStatus, out *BootEntryStatus, s conversion.Scope) error {
+	return autoConvert_node_BootEntryStatus_To_v1alpha1_BootEntryStatus(in, out, s)
 }
 
 func autoConvert_v1alpha1_Disk_To_node_Disk(in *Disk, out *node.Disk, s conversion.Scope) error {
@@ -633,4 +807,98 @@ func autoConvert_node_OSConfigStatus_To_v1alpha1_OSConfigStatus(in *node.OSConfi
 // Convert_node_OSConfigStatus_To_v1alpha1_OSConfigStatus is an autogenerated conversion function.
 func Convert_node_OSConfigStatus_To_v1alpha1_OSConfigStatus(in *node.OSConfigStatus, out *OSConfigStatus, s conversion.Scope) error {
 	return autoConvert_node_OSConfigStatus_To_v1alpha1_OSConfigStatus(in, out, s)
+}
+
+func autoConvert_v1alpha1_Upgrade_To_node_Upgrade(in *Upgrade, out *node.Upgrade, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
+	if err := Convert_v1alpha1_UpgradeSpec_To_node_UpgradeSpec(&in.Spec, &out.Spec, s); err != nil {
+		return err
+	}
+	if err := Convert_v1alpha1_UpgradeStatus_To_node_UpgradeStatus(&in.Status, &out.Status, s); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Convert_v1alpha1_Upgrade_To_node_Upgrade is an autogenerated conversion function.
+func Convert_v1alpha1_Upgrade_To_node_Upgrade(in *Upgrade, out *node.Upgrade, s conversion.Scope) error {
+	return autoConvert_v1alpha1_Upgrade_To_node_Upgrade(in, out, s)
+}
+
+func autoConvert_node_Upgrade_To_v1alpha1_Upgrade(in *node.Upgrade, out *Upgrade, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
+	if err := Convert_node_UpgradeSpec_To_v1alpha1_UpgradeSpec(&in.Spec, &out.Spec, s); err != nil {
+		return err
+	}
+	if err := Convert_node_UpgradeStatus_To_v1alpha1_UpgradeStatus(&in.Status, &out.Status, s); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Convert_node_Upgrade_To_v1alpha1_Upgrade is an autogenerated conversion function.
+func Convert_node_Upgrade_To_v1alpha1_Upgrade(in *node.Upgrade, out *Upgrade, s conversion.Scope) error {
+	return autoConvert_node_Upgrade_To_v1alpha1_Upgrade(in, out, s)
+}
+
+func autoConvert_v1alpha1_UpgradeList_To_node_UpgradeList(in *UpgradeList, out *node.UpgradeList, s conversion.Scope) error {
+	out.ListMeta = in.ListMeta
+	out.Items = *(*[]node.Upgrade)(unsafe.Pointer(&in.Items))
+	return nil
+}
+
+// Convert_v1alpha1_UpgradeList_To_node_UpgradeList is an autogenerated conversion function.
+func Convert_v1alpha1_UpgradeList_To_node_UpgradeList(in *UpgradeList, out *node.UpgradeList, s conversion.Scope) error {
+	return autoConvert_v1alpha1_UpgradeList_To_node_UpgradeList(in, out, s)
+}
+
+func autoConvert_node_UpgradeList_To_v1alpha1_UpgradeList(in *node.UpgradeList, out *UpgradeList, s conversion.Scope) error {
+	out.ListMeta = in.ListMeta
+	out.Items = *(*[]Upgrade)(unsafe.Pointer(&in.Items))
+	return nil
+}
+
+// Convert_node_UpgradeList_To_v1alpha1_UpgradeList is an autogenerated conversion function.
+func Convert_node_UpgradeList_To_v1alpha1_UpgradeList(in *node.UpgradeList, out *UpgradeList, s conversion.Scope) error {
+	return autoConvert_node_UpgradeList_To_v1alpha1_UpgradeList(in, out, s)
+}
+
+func autoConvert_v1alpha1_UpgradeSpec_To_node_UpgradeSpec(in *UpgradeSpec, out *node.UpgradeSpec, s conversion.Scope) error {
+	*out = *(*node.UpgradeSpec)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_v1alpha1_UpgradeSpec_To_node_UpgradeSpec is an autogenerated conversion function.
+func Convert_v1alpha1_UpgradeSpec_To_node_UpgradeSpec(in *UpgradeSpec, out *node.UpgradeSpec, s conversion.Scope) error {
+	return autoConvert_v1alpha1_UpgradeSpec_To_node_UpgradeSpec(in, out, s)
+}
+
+func autoConvert_node_UpgradeSpec_To_v1alpha1_UpgradeSpec(in *node.UpgradeSpec, out *UpgradeSpec, s conversion.Scope) error {
+	*out = *(*UpgradeSpec)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_node_UpgradeSpec_To_v1alpha1_UpgradeSpec is an autogenerated conversion function.
+func Convert_node_UpgradeSpec_To_v1alpha1_UpgradeSpec(in *node.UpgradeSpec, out *UpgradeSpec, s conversion.Scope) error {
+	return autoConvert_node_UpgradeSpec_To_v1alpha1_UpgradeSpec(in, out, s)
+}
+
+func autoConvert_v1alpha1_UpgradeStatus_To_node_UpgradeStatus(in *UpgradeStatus, out *node.UpgradeStatus, s conversion.Scope) error {
+	*out = *(*node.UpgradeStatus)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_v1alpha1_UpgradeStatus_To_node_UpgradeStatus is an autogenerated conversion function.
+func Convert_v1alpha1_UpgradeStatus_To_node_UpgradeStatus(in *UpgradeStatus, out *node.UpgradeStatus, s conversion.Scope) error {
+	return autoConvert_v1alpha1_UpgradeStatus_To_node_UpgradeStatus(in, out, s)
+}
+
+func autoConvert_node_UpgradeStatus_To_v1alpha1_UpgradeStatus(in *node.UpgradeStatus, out *UpgradeStatus, s conversion.Scope) error {
+	*out = *(*UpgradeStatus)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_node_UpgradeStatus_To_v1alpha1_UpgradeStatus is an autogenerated conversion function.
+func Convert_node_UpgradeStatus_To_v1alpha1_UpgradeStatus(in *node.UpgradeStatus, out *UpgradeStatus, s conversion.Scope) error {
+	return autoConvert_node_UpgradeStatus_To_v1alpha1_UpgradeStatus(in, out, s)
 }

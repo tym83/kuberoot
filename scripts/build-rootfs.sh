@@ -10,6 +10,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 OUT="$ROOT/out/$ARCH"
 # shellcheck source=/dev/null
 set -a; . "$ROOT/build/components.env"; set +a
+VERSION=${KUBEROOT_VERSION:-0.1.0-dev}
 
 case "$ARCH" in
   arm64) PLATFORM=linux/arm64 ;;
@@ -35,7 +36,7 @@ docker run --rm --platform "$PLATFORM" -v "$OUT/glibc:/glibc" "debian:trixie-sli
 
 docker run --rm --platform "$PLATFORM" \
   -v "$OUT:/out" -v "$ROOT/.cache/$ARCH:/cache" -v "$ROOT/rootfs:/overlay:ro" \
-  -e ARCH="$ARCH" -e K8S_VERSION -e CONTAINERD_VERSION -e RUNC_VERSION -e CNI_VERSION -e KINE_VERSION \
+  -e ARCH="$ARCH" -e VERSION="$VERSION" -e K8S_VERSION -e CONTAINERD_VERSION -e RUNC_VERSION -e CNI_VERSION -e KINE_VERSION \
   "alpine:$ALPINE_VERSION" sh -euo pipefail -c '
     apk add --no-cache -q curl squashfs-tools tar
     fetch() { [ -s "/cache/$2" ] || curl -fsSL -o "/cache/$2" "$1"; }
@@ -67,8 +68,10 @@ docker run --rm --platform "$PLATFORM" \
     install -m 0755 /out/kuberoot-installer $r/usr/bin/kuberoot-installer
     cp -r /out/glibc/. $r/
     cp -r /overlay/. $r/
+    printf "NAME=\"kuberoot\"\nID=kuberoot\nPRETTY_NAME=\"kuberoot %s (edge)\"\nVERSION_ID=%s\nHOME_URL=\"https://github.com/tym83/kuberoot\"\n" "$VERSION" "$VERSION" > $r/etc/os-release
     mkdir -p $r/dev $r/proc $r/sys $r/run $r/tmp $r/var $r/etc/kubernetes $r/etc/cni/net.d
     rm -f /out/rootfs.squashfs
     mksquashfs $r /out/rootfs.squashfs -comp zstd -all-root -noappend -quiet
   '
+echo "$VERSION" > "$OUT/VERSION"
 echo "rootfs: out/$ARCH/rootfs.squashfs ($(du -h "$OUT/rootfs.squashfs" | cut -f1))"

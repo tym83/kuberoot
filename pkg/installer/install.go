@@ -178,7 +178,7 @@ func WriteRoot(ctx context.Context, a bootdisk.Artifacts, device string, report 
 	buf := make([]byte, 4<<20)
 	var done int64
 	for {
-		if ctx.Err() != nil {
+		if ctx != nil && ctx.Err() != nil {
 			return ctx.Err()
 		}
 		n, rerr := src.Read(buf)
@@ -247,12 +247,15 @@ func PartitionOn(diskName, label string) string {
 	return ""
 }
 
+// CurrentBootArgs are the boot arguments a new slot inherits from the running one.
+func CurrentBootArgs() string { return consoleArgs() }
+
 // consoleArgs carries the console and kuberoot.* settings the media booted with,
 // except the live-only ones, over to the installed system.
 func consoleArgs() string {
 	var args []string
 	for _, f := range strings.Fields(readFile("/proc/cmdline")) {
-		if strings.HasPrefix(f, "kuberoot.root=") || f == "kuberoot.mode=install" {
+		if strings.HasPrefix(f, "kuberoot.root=") || f == "kuberoot.mode=install" || f == "quiet" || strings.HasPrefix(f, "panic=") {
 			continue
 		}
 		if strings.HasPrefix(f, "console=") || strings.HasPrefix(f, "kuberoot.") {

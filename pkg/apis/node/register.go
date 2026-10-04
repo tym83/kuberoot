@@ -25,6 +25,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&Kubeconfig{}, &KubeconfigList{},
 		&Disk{}, &DiskList{},
 		&Installation{}, &InstallationList{},
+		&BootEntry{}, &BootEntryList{},
+		&Upgrade{}, &UpgradeList{},
 	)
 	return nil
 }

@@ -31,6 +31,10 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.BootEntry":          schema_pkg_apis_node_v1alpha1_BootEntry(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.BootEntryList":      schema_pkg_apis_node_v1alpha1_BootEntryList(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.BootEntrySpec":      schema_pkg_apis_node_v1alpha1_BootEntrySpec(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.BootEntryStatus":    schema_pkg_apis_node_v1alpha1_BootEntryStatus(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Disk":               schema_pkg_apis_node_v1alpha1_Disk(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.DiskList":           schema_pkg_apis_node_v1alpha1_DiskList(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.DiskPartition":      schema_pkg_apis_node_v1alpha1_DiskPartition(ref),
@@ -49,6 +53,10 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.OSConfigList":       schema_pkg_apis_node_v1alpha1_OSConfigList(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.OSConfigSpec":       schema_pkg_apis_node_v1alpha1_OSConfigSpec(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.OSConfigStatus":     schema_pkg_apis_node_v1alpha1_OSConfigStatus(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Upgrade":            schema_pkg_apis_node_v1alpha1_Upgrade(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.UpgradeList":        schema_pkg_apis_node_v1alpha1_UpgradeList(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.UpgradeSpec":        schema_pkg_apis_node_v1alpha1_UpgradeSpec(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.UpgradeStatus":      schema_pkg_apis_node_v1alpha1_UpgradeStatus(ref),
 		v1.APIGroup{}.OpenAPIModelName():                                      schema_pkg_apis_meta_v1_APIGroup(ref),
 		v1.APIGroupList{}.OpenAPIModelName():                                  schema_pkg_apis_meta_v1_APIGroupList(ref),
 		v1.APIResource{}.OpenAPIModelName():                                   schema_pkg_apis_meta_v1_APIResource(ref),
@@ -103,6 +111,168 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		runtime.TypeMeta{}.OpenAPIModelName():                                 schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
 		runtime.Unknown{}.OpenAPIModelName():                                  schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
 		version.Info{}.OpenAPIModelName():                                     schema_k8sio_apimachinery_pkg_version_Info(ref),
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_BootEntry(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "BootEntry is one of the two root slots as the bootloader sees it.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.BootEntrySpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.BootEntryStatus"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.BootEntrySpec", "github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.BootEntryStatus", v1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_BootEntryList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.BootEntry"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.BootEntry", v1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_BootEntrySpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"preferred": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Preferred makes this slot the default for the next boot: a manual rollback.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_BootEntryStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"release": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"state": {
+						SchemaProps: spec.SchemaProps{
+							Description: "State is Good, Trying (on probation, with boot attempts left) or Bad.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"triesLeft": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int32",
+						},
+					},
+					"booted": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"boolean"},
+							Format: "",
+						},
+					},
+					"default": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"boolean"},
+							Format: "",
+						},
+					},
+					"sortVersion": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int32",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -932,6 +1102,179 @@ func schema_pkg_apis_node_v1alpha1_OSConfigStatus(ref common.ReferenceCallback) 
 		},
 		Dependencies: []string{
 			v1.Time{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_Upgrade(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Upgrade stages a new release into the inactive slot and boots it on probation.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.UpgradeSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.UpgradeStatus"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.UpgradeSpec", "github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.UpgradeStatus", v1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_UpgradeList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Upgrade"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Upgrade", v1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_UpgradeSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"url": {
+						SchemaProps: spec.SchemaProps{
+							Description: "URL of the release bundle.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"sha256": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SHA256 of the bundle; checked when set.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"reboot": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Reboot into the new slot when staged.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"url"},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_UpgradeStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"phase": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"message": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"progress": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int32",
+						},
+					},
+					"slot": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"release": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+				Required: []string{"progress"},
+			},
+		},
 	}
 }
 

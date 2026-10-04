@@ -166,3 +166,73 @@ type InstallationList struct {
 
 	Items []Installation `json:"items"`
 }
+
+// BootEntry is one of the two root slots as the bootloader sees it.
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +genclient:nonNamespaced
+type BootEntry struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   BootEntrySpec   `json:"spec,omitempty"`
+	Status BootEntryStatus `json:"status,omitempty"`
+}
+
+type BootEntrySpec struct {
+	// Preferred makes this slot the default for the next boot: a manual rollback.
+	Preferred bool `json:"preferred,omitempty"`
+}
+
+type BootEntryStatus struct {
+	Release string `json:"release,omitempty"`
+	// State is Good, Trying (on probation, with boot attempts left) or Bad.
+	State       string `json:"state,omitempty"`
+	TriesLeft   int32  `json:"triesLeft,omitempty"`
+	Booted      bool   `json:"booted,omitempty"`
+	Default     bool   `json:"default,omitempty"`
+	SortVersion int32  `json:"sortVersion,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type BootEntryList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []BootEntry `json:"items"`
+}
+
+// Upgrade stages a new release into the inactive slot and boots it on probation.
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +genclient:nonNamespaced
+type Upgrade struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   UpgradeSpec   `json:"spec,omitempty"`
+	Status UpgradeStatus `json:"status,omitempty"`
+}
+
+type UpgradeSpec struct {
+	// URL of the release bundle.
+	URL string `json:"url"`
+	// SHA256 of the bundle; checked when set.
+	Sha256 string `json:"sha256,omitempty"`
+	// Reboot into the new slot when staged.
+	Reboot bool `json:"reboot,omitempty"`
+}
+
+type UpgradeStatus struct {
+	Phase    string `json:"phase,omitempty"`
+	Message  string `json:"message,omitempty"`
+	Progress int32  `json:"progress"`
+	Slot     string `json:"slot,omitempty"`
+	Release  string `json:"release,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type UpgradeList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []Upgrade `json:"items"`
+}

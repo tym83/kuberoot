@@ -27,6 +27,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&Kubeconfig{}, &KubeconfigList{},
 		&Disk{}, &DiskList{},
 		&Installation{}, &InstallationList{},
+		&BootEntry{}, &BootEntryList{},
+		&Upgrade{}, &UpgradeList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil

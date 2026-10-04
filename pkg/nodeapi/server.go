@@ -94,10 +94,13 @@ func Run(ctx context.Context, o Options) error {
 		"kubeconfigs":      &kubeconfigStorage{files: o.Kubeconfig},
 		"disks":            diskStorage{},
 		"installations":    &installationStorage{kinit: kinit},
+		"bootentries":      bootEntryStorage{},
+		"upgrades":         &upgradeStorage{kinit: kinit},
 	}
 	if err := server.InstallAPIGroup(&group); err != nil {
 		return err
 	}
+	go assessBoot(ctx, kinit)
 	return server.PrepareRun().RunWithContext(ctx)
 }
 
