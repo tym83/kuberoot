@@ -17,9 +17,13 @@ case "$ARCH" in
     console=ttyS0 ;;
 esac
 
-exec "${machine[@]}" -smp 2 -m 2048 -nographic -no-reboot \
-  -kernel "$OUT/kernel" -initrd "$OUT/initramfs.cpio.gz" \
-  -append "console=$console panic=-1 ${KAPPEND:-quiet}" \
+# QEMU's DNS proxy cannot use the IPv6 link-local resolvers macOS often lists first,
+# and home routers tend to refuse queries arriving through user-mode NAT.
+dns=${DNS:-1.1.1.1}
+
+exec "${machine[@]}" -smp 4 -m 4096 -nographic -no-reboot \
+  -kernel "$OUT/kernel" -initrd "$OUT/initramfs.cpio" \
+  -append "console=$console panic=-1 ${dns:+kuberoot.nameserver=$dns} ${KAPPEND:-quiet}" \
   -netdev user,id=n0,hostfwd=tcp::6443-:6443,hostfwd=tcp::50000-:50000 \
   -device virtio-net-pci,netdev=n0 \
   "$@"

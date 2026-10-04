@@ -1,21 +1,19 @@
 #!/usr/bin/env bash
-# Packs kinit and the node root filesystem into a gzip'd newc initramfs.
+# Packs the boot stage: kinit as /init plus the root filesystem image it mounts.
 # Usage: scripts/build-initramfs.sh <arch: arm64|amd64>
 set -euo pipefail
 
 ARCH=${1:?arch required}
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
-OUT="$ROOT/out/$ARCH"
+OUT="$(cd "$(dirname "$0")/.." && pwd)/out/$ARCH"
 
-mkdir -p "$OUT"
-GOOS=linux GOARCH=$ARCH CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o "$OUT/kinit" "$ROOT/cmd/kinit"
-
+docker build -q -t kuberoot-builder -f "$OUT/../../build/Dockerfile.builder" "$OUT/../../build" >/dev/null
 docker run --rm -v "$OUT:/out" kuberoot-builder bash -euo pipefail -c '
-  rootfs=$(mktemp -d)
-  cd "$rootfs"
-  mkdir -p dev proc sys run tmp etc var/lib usr/bin
+  stage=$(mktemp -d)
+  cd "$stage"
+  mkdir -p dev proc sys newroot
   install -m 0755 /out/kinit init
-  echo kuberoot > etc/hostname
-  find . -print0 | sort -z | cpio --null -o -H newc -R 0:0 --quiet | gzip -9 > /out/initramfs.cpio.gz
+  cp /out/rootfs.squashfs rootfs.squashfs
+  # Left uncompressed: the squashfs inside is already zstd-compressed.
+  find . -print0 | sort -z | cpio --null -o -H newc -R 0:0 --quiet > /out/initramfs.cpio
 '
-echo "initramfs: out/$ARCH/initramfs.cpio.gz ($(du -h "$OUT/initramfs.cpio.gz" | cut -f1))"
+echo "initramfs: out/$ARCH/initramfs.cpio ($(du -h "$OUT/initramfs.cpio" | cut -f1))"
