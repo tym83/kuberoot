@@ -85,3 +85,17 @@ func (c *Client) Reboot(ctx context.Context) error {
 	}
 	return resp.Body.Close()
 }
+
+// Reconfigure asks kinit to stop every service, regenerate the node
+// configuration (role, certificates) and start again, without a reboot.
+func (c *Client) Reconfigure(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://kinit/v1/reconfigure", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	return resp.Body.Close()
+}

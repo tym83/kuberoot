@@ -43,8 +43,16 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.InstallationList":   schema_pkg_apis_node_v1alpha1_InstallationList(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.InstallationSpec":   schema_pkg_apis_node_v1alpha1_InstallationSpec(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.InstallationStatus": schema_pkg_apis_node_v1alpha1_InstallationStatus(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.JoinTicket":         schema_pkg_apis_node_v1alpha1_JoinTicket(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.JoinTicketList":     schema_pkg_apis_node_v1alpha1_JoinTicketList(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.JoinTicketSpec":     schema_pkg_apis_node_v1alpha1_JoinTicketSpec(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.JoinTicketStatus":   schema_pkg_apis_node_v1alpha1_JoinTicketStatus(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Kubeconfig":         schema_pkg_apis_node_v1alpha1_Kubeconfig(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.KubeconfigList":     schema_pkg_apis_node_v1alpha1_KubeconfigList(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Membership":         schema_pkg_apis_node_v1alpha1_Membership(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.MembershipList":     schema_pkg_apis_node_v1alpha1_MembershipList(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.MembershipSpec":     schema_pkg_apis_node_v1alpha1_MembershipSpec(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.MembershipStatus":   schema_pkg_apis_node_v1alpha1_MembershipStatus(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.NodeService":        schema_pkg_apis_node_v1alpha1_NodeService(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.NodeServiceList":    schema_pkg_apis_node_v1alpha1_NodeServiceList(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.NodeServiceSpec":    schema_pkg_apis_node_v1alpha1_NodeServiceSpec(ref),
@@ -618,6 +626,146 @@ func schema_pkg_apis_node_v1alpha1_InstallationStatus(ref common.ReferenceCallba
 	}
 }
 
+func schema_pkg_apis_node_v1alpha1_JoinTicket(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "JoinTicket is issued by the control plane node: everything another node needs to join, ready to apply to that node as a Membership.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.JoinTicketSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.JoinTicketStatus"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.JoinTicketSpec", "github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.JoinTicketStatus", v1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_JoinTicketList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.JoinTicket"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.JoinTicket", v1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_JoinTicketSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"ttl": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TTL of the bootstrap token; defaults to one hour.",
+							Ref:         ref(v1.Duration{}.OpenAPIModelName()),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			v1.Duration{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_JoinTicketStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"expires": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref(v1.Time{}.OpenAPIModelName()),
+						},
+					},
+					"membership": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Membership is a complete Membership manifest for the joining node.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			v1.Time{}.OpenAPIModelName()},
+	}
+}
+
 func schema_pkg_apis_node_v1alpha1_Kubeconfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -711,6 +859,191 @@ func schema_pkg_apis_node_v1alpha1_KubeconfigList(ref common.ReferenceCallback) 
 		},
 		Dependencies: []string{
 			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Kubeconfig", v1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_Membership(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Membership makes this node a member of a cluster run by another node. There is at most one, named \"cluster\"; deleting it turns the node back into a standalone single-node cluster.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.MembershipSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.MembershipStatus"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.MembershipSpec", "github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.MembershipStatus", v1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_MembershipList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Membership"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Membership", v1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_MembershipSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"role": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Role of this node in the cluster; only Worker for now.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"server": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Server is the cluster API server URL.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"clusterCA": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ClusterCA is the PEM bundle of the cluster CA.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"bootstrapToken": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BootstrapToken lets the kubelet request its client certificate.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"frontProxyCA": {
+						SchemaProps: spec.SchemaProps{
+							Description: "FrontProxyCA is the PEM bundle the cluster API server forwards requests with.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"nodeAPICert": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NodeAPICert and NodeAPIKey are the serving certificate, signed by the cluster CA, the node API presents to the cluster.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"nodeAPIKey": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+				},
+				Required: []string{"role", "server", "clusterCA", "bootstrapToken", "nodeAPICert", "nodeAPIKey"},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_MembershipStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"phase": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"message": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 

@@ -14,7 +14,7 @@ import (
 )
 
 // serveControl exposes service status and actions to node-local clients.
-func serveControl() {
+func serveControl(reconfigure func()) {
 	if err := os.MkdirAll(filepath.Dir(supervisor.Socket), 0o700); err != nil {
 		log.Printf("control socket: %v", err)
 		return
@@ -36,6 +36,9 @@ func serveControl() {
 			return
 		}
 		_ = p.(*os.Process).Signal(unix.SIGTERM)
+	})
+	mux.HandleFunc("POST /v1/reconfigure", func(http.ResponseWriter, *http.Request) {
+		go reconfigure()
 	})
 	mux.HandleFunc("POST /v1/reboot", func(http.ResponseWriter, *http.Request) {
 		go shutdown(unix.SIGINT)

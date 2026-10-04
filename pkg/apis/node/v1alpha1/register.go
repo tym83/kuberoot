@@ -29,6 +29,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&Installation{}, &InstallationList{},
 		&BootEntry{}, &BootEntryList{},
 		&Upgrade{}, &UpgradeList{},
+		&Membership{}, &MembershipList{},
+		&JoinTicket{}, &JoinTicketList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil

@@ -27,6 +27,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&Installation{}, &InstallationList{},
 		&BootEntry{}, &BootEntryList{},
 		&Upgrade{}, &UpgradeList{},
+		&Membership{}, &MembershipList{},
+		&JoinTicket{}, &JoinTicketList{},
 	)
 	return nil
 }

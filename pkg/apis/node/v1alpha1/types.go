@@ -236,3 +236,77 @@ type UpgradeList struct {
 
 	Items []Upgrade `json:"items"`
 }
+
+// Membership makes this node a member of a cluster run by another node. There is
+// at most one, named "cluster"; deleting it turns the node back into a
+// standalone single-node cluster.
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +genclient:nonNamespaced
+type Membership struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   MembershipSpec   `json:"spec,omitempty"`
+	Status MembershipStatus `json:"status,omitempty"`
+}
+
+type MembershipSpec struct {
+	// Role of this node in the cluster; only Worker for now.
+	Role string `json:"role"`
+	// Server is the cluster API server URL.
+	Server string `json:"server"`
+	// ClusterCA is the PEM bundle of the cluster CA.
+	ClusterCA string `json:"clusterCA"`
+	// BootstrapToken lets the kubelet request its client certificate.
+	BootstrapToken string `json:"bootstrapToken"`
+	// FrontProxyCA is the PEM bundle the cluster API server forwards requests with.
+	FrontProxyCA string `json:"frontProxyCA,omitempty"`
+	// NodeAPICert and NodeAPIKey are the serving certificate, signed by the
+	// cluster CA, the node API presents to the cluster.
+	NodeAPICert string `json:"nodeAPICert"`
+	NodeAPIKey  string `json:"nodeAPIKey"`
+}
+
+type MembershipStatus struct {
+	Phase   string `json:"phase,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type MembershipList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []Membership `json:"items"`
+}
+
+// JoinTicket is issued by the control plane node: everything another node needs
+// to join, ready to apply to that node as a Membership.
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +genclient:nonNamespaced
+type JoinTicket struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   JoinTicketSpec   `json:"spec,omitempty"`
+	Status JoinTicketStatus `json:"status,omitempty"`
+}
+
+type JoinTicketSpec struct {
+	// TTL of the bootstrap token; defaults to one hour.
+	TTL *metav1.Duration `json:"ttl,omitempty"`
+}
+
+type JoinTicketStatus struct {
+	Expires *metav1.Time `json:"expires,omitempty"`
+	// Membership is a complete Membership manifest for the joining node.
+	Membership string `json:"membership,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type JoinTicketList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []JoinTicket `json:"items"`
+}

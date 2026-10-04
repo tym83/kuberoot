@@ -60,15 +60,18 @@ func boot() error {
 	if err := setHostname(node); err != nil {
 		return err
 	}
-	if err := writeNodeConfig(node); err != nil {
+	services, controlPlane, err := configure(node)
+	if err != nil {
 		return err
 	}
 	if cfg.dev {
 		printNodeKubeconfig()
 	}
-	serveControl()
-	startServices(node, cfg)
-	go applyAddons(cfg, node)
+	serveControl(func() { reconfigure(node, cfg) })
+	startServices(services, cfg)
+	if controlPlane {
+		go applyAddons(cfg, node)
+	}
 	return nil
 }
 

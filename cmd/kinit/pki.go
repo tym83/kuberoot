@@ -103,6 +103,8 @@ func createAggregationPKI(clusterCA *authority) error {
 		{file: "node-api-cluster", commonName: nodeAPIServiceDNS, usages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 			dnsNames: []string{nodeAPIServiceDNS, "kuberoot-node.kube-system.svc.cluster.local"}},
 		{file: "node-api-delegation", commonName: "kuberoot:node-api", usages: client},
+		// The control plane node API reaches member node APIs with this identity.
+		{file: "node-api-proxy", commonName: "kuberoot:node-api-proxy", usages: client},
 	} {
 		if err := clusterCA.issue(s); err != nil {
 			return fmt.Errorf("issue %s: %w", s.file, err)

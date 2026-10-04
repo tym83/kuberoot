@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -32,7 +33,11 @@ var (
 	childrenMu sync.Mutex
 	children   = map[int]chan unix.WaitStatus{}
 	running    sync.Map // service name -> *os.Process
-	stopping   bool
+
+	// A generation is one set of running services; reconfiguring replaces it.
+	genMu     sync.Mutex
+	genCancel context.CancelFunc
+	genDone   sync.WaitGroup
 
 	statusMu sync.Mutex
 	statuses = map[string]*supervisor.ServiceStatus{}
@@ -51,11 +56,13 @@ func setStatus(name string, update func(*supervisor.ServiceStatus)) {
 
 func logPath(name string) string { return filepath.Join("/var/log/kuberoot", name+".log") }
 
+// nodeServices is what a standalone node, or the control plane node of a cluster, runs.
 func nodeServices(node nodeInfo) []service {
 	ip := node.ip.String()
 	return []service{
 		{name: "kuberoot-node", args: []string{"/usr/bin/kuberoot-node",
 			"--node-name=" + node.name,
+			"--advertise-address=" + ip,
 			"--tls-cert-file=" + pkiPath("node-api.crt"),
 			"--tls-private-key-file=" + pkiPath("node-api.key"),
 			"--client-ca-file=" + pkiPath("node-ca.crt"),
@@ -64,6 +71,12 @@ func nodeServices(node nodeInfo) []service {
 			"--cluster-tls-cert-file=" + pkiPath("node-api-cluster.crt"),
 			"--cluster-tls-private-key-file=" + pkiPath("node-api-cluster.key"),
 			"--cluster-kubeconfig=" + kubeDir + "/node-api-delegation.kubeconfig",
+			"--cluster-ca-file=" + pkiPath("ca.crt"),
+			"--cluster-ca-key-file=" + pkiPath("ca.key"),
+			"--admin-kubeconfig=" + kubeDir + "/admin.kubeconfig",
+			"--proxy-client-cert-file=" + pkiPath("node-api-proxy.crt"),
+			"--proxy-client-key-file=" + pkiPath("node-api-proxy.key"),
+			"--routes-kubeconfig=" + kubeDir + "/admin.kubeconfig",
 		}},
 		{name: "containerd", args: []string{"/usr/bin/containerd", "--config", "/etc/containerd/config.toml"}},
 		{name: "kine", args: []string{"/usr/bin/kine",
@@ -79,7 +92,6 @@ func nodeServices(node nodeInfo) []service {
 			"--tls-private-key-file=" + pkiPath("apiserver.key"),
 			"--kubelet-client-certificate=" + pkiPath("apiserver-kubelet-client.crt"),
 			"--kubelet-client-key=" + pkiPath("apiserver-kubelet-client.key"),
-			"--kubelet-certificate-authority=" + pkiPath("ca.crt"),
 			"--kubelet-preferred-address-types=InternalIP",
 			"--service-account-issuer=https://kubernetes.default.svc.cluster.local",
 			"--service-account-key-file=" + pkiPath("sa.pub"),
@@ -87,6 +99,7 @@ func nodeServices(node nodeInfo) []service {
 			"--authorization-mode=Node,RBAC",
 			"--enable-admission-plugins=NodeRestriction",
 			"--allow-privileged=true",
+			"--enable-bootstrap-token-auth=true",
 			// Aggregation: the node API joins the cluster API through the front proxy.
 			"--requestheader-client-ca-file=" + pkiPath("front-proxy-ca.crt"),
 			"--requestheader-allowed-names=front-proxy-client",
@@ -106,6 +119,7 @@ func nodeServices(node nodeInfo) []service {
 			"--cluster-signing-cert-file=" + pkiPath("ca.crt"),
 			"--cluster-signing-key-file=" + pkiPath("ca.key"),
 			"--use-service-account-credentials=true",
+			"--controllers=*,bootstrapsigner,tokencleaner",
 			"--leader-elect=false",
 		}},
 		{name: "kube-scheduler", args: []string{"/usr/bin/kube-scheduler",
@@ -119,6 +133,7 @@ func nodeServices(node nodeInfo) []service {
 			"--kubeconfig=" + kubeDir + "/kubelet-client.kubeconfig",
 			"--hostname-override=" + node.name,
 			"--node-ip=" + ip,
+			"--node-labels=" + podSubnetLabel(podCIDR),
 		}},
 		{name: "kube-proxy", args: []string{"/usr/bin/kube-proxy",
 			"--kubeconfig=" + kubeDir + "/kube-proxy.kubeconfig",
@@ -129,8 +144,7 @@ func nodeServices(node nodeInfo) []service {
 	}
 }
 
-func startServices(node nodeInfo, cfg bootConfig) {
-	services := nodeServices(node)
+func startServices(services []service, cfg bootConfig) {
 	if cfg.install {
 		services = append(services, service{name: "installer", args: []string{"/usr/bin/kuberoot-installer"}, console: true})
 		// From here on the console belongs to the installer screen: kernel
@@ -149,18 +163,40 @@ func startServices(node nodeInfo, cfg bootConfig) {
 	_ = os.WriteFile("/sys/fs/cgroup/cgroup.subtree_control", controllers, 0o644)
 	_ = os.MkdirAll(serviceCgroups, 0o755)
 	_ = os.WriteFile(filepath.Join(serviceCgroups, "cgroup.subtree_control"), controllers, 0o644)
+	ctx, cancel := context.WithCancel(context.Background())
+	genMu.Lock()
+	genCancel = cancel
+	genMu.Unlock()
 	for _, s := range services {
-		go supervise(s, cfg.verbose)
+		genDone.Add(1)
+		go func() {
+			defer genDone.Done()
+			supervise(ctx, s, cfg.verbose)
+		}()
 	}
 }
 
+// stopServices ends the current generation: every service gets SIGTERM, then
+// SIGKILL if it outstays its grace period.
+func stopServices() {
+	genMu.Lock()
+	if genCancel != nil {
+		genCancel()
+	}
+	genMu.Unlock()
+	genDone.Wait()
+	statusMu.Lock()
+	statuses = map[string]*supervisor.ServiceStatus{}
+	statusMu.Unlock()
+}
+
 // supervise keeps a service running, restarting it with backoff when it exits.
-func supervise(s service, verbose bool) {
+func supervise(ctx context.Context, s service, verbose bool) {
 	backoff := time.Second
-	for !stopping {
+	for ctx.Err() == nil {
 		started := time.Now()
-		status, err := runService(s, verbose)
-		if stopping {
+		status, err := runService(ctx, s, verbose)
+		if ctx.Err() != nil {
 			return
 		}
 		exit := describe(status)
@@ -177,12 +213,16 @@ func supervise(s service, verbose bool) {
 		if time.Since(started) > time.Minute {
 			backoff = time.Second
 		}
-		time.Sleep(backoff)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(backoff):
+		}
 		backoff = min(backoff*2, 30*time.Second)
 	}
 }
 
-func runService(s service, verbose bool) (unix.WaitStatus, error) {
+func runService(ctx context.Context, s service, verbose bool) (unix.WaitStatus, error) {
 	logFile, err := os.OpenFile(logPath(s.name), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return 0, err
@@ -215,9 +255,20 @@ func runService(s service, verbose bool) (unix.WaitStatus, error) {
 	setStatus(s.name, func(st *supervisor.ServiceStatus) {
 		st.State, st.PID, st.StartedAt = supervisor.StateRunning, cmd.Process.Pid, time.Now()
 	})
-	status := <-done
-	running.Delete(s.name)
-	return status, nil
+	defer running.Delete(s.name)
+	select {
+	case status := <-done:
+		return status, nil
+	case <-ctx.Done():
+	}
+	_ = cmd.Process.Signal(unix.SIGTERM)
+	select {
+	case status := <-done:
+		return status, nil
+	case <-time.After(15 * time.Second):
+		_ = cmd.Process.Kill()
+		return <-done, nil
+	}
 }
 
 // spawn starts cmd and returns a channel that receives its exit status from the reaper.
@@ -256,15 +307,6 @@ func joinCgroup(name string, pid int) {
 		return
 	}
 	_ = os.WriteFile(filepath.Join(dir, "cgroup.procs"), []byte(strconv.Itoa(pid)), 0o644)
-}
-
-func stopServices() {
-	stopping = true
-	running.Range(func(_, p any) bool {
-		_ = p.(*os.Process).Signal(unix.SIGTERM)
-		return true
-	})
-	time.Sleep(3 * time.Second)
 }
 
 func describe(ws unix.WaitStatus) string {

@@ -156,6 +156,46 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
+	if err := s.AddGeneratedConversionFunc((*JoinTicket)(nil), (*node.JoinTicket)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_JoinTicket_To_node_JoinTicket(a.(*JoinTicket), b.(*node.JoinTicket), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.JoinTicket)(nil), (*JoinTicket)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_JoinTicket_To_v1alpha1_JoinTicket(a.(*node.JoinTicket), b.(*JoinTicket), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*JoinTicketList)(nil), (*node.JoinTicketList)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_JoinTicketList_To_node_JoinTicketList(a.(*JoinTicketList), b.(*node.JoinTicketList), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.JoinTicketList)(nil), (*JoinTicketList)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_JoinTicketList_To_v1alpha1_JoinTicketList(a.(*node.JoinTicketList), b.(*JoinTicketList), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*JoinTicketSpec)(nil), (*node.JoinTicketSpec)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_JoinTicketSpec_To_node_JoinTicketSpec(a.(*JoinTicketSpec), b.(*node.JoinTicketSpec), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.JoinTicketSpec)(nil), (*JoinTicketSpec)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_JoinTicketSpec_To_v1alpha1_JoinTicketSpec(a.(*node.JoinTicketSpec), b.(*JoinTicketSpec), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*JoinTicketStatus)(nil), (*node.JoinTicketStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_JoinTicketStatus_To_node_JoinTicketStatus(a.(*JoinTicketStatus), b.(*node.JoinTicketStatus), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.JoinTicketStatus)(nil), (*JoinTicketStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_JoinTicketStatus_To_v1alpha1_JoinTicketStatus(a.(*node.JoinTicketStatus), b.(*JoinTicketStatus), scope)
+	}); err != nil {
+		return err
+	}
 	if err := s.AddGeneratedConversionFunc((*Kubeconfig)(nil), (*node.Kubeconfig)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1alpha1_Kubeconfig_To_node_Kubeconfig(a.(*Kubeconfig), b.(*node.Kubeconfig), scope)
 	}); err != nil {
@@ -173,6 +213,46 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}
 	if err := s.AddGeneratedConversionFunc((*node.KubeconfigList)(nil), (*KubeconfigList)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_node_KubeconfigList_To_v1alpha1_KubeconfigList(a.(*node.KubeconfigList), b.(*KubeconfigList), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*Membership)(nil), (*node.Membership)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_Membership_To_node_Membership(a.(*Membership), b.(*node.Membership), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.Membership)(nil), (*Membership)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_Membership_To_v1alpha1_Membership(a.(*node.Membership), b.(*Membership), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*MembershipList)(nil), (*node.MembershipList)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_MembershipList_To_node_MembershipList(a.(*MembershipList), b.(*node.MembershipList), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.MembershipList)(nil), (*MembershipList)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_MembershipList_To_v1alpha1_MembershipList(a.(*node.MembershipList), b.(*MembershipList), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*MembershipSpec)(nil), (*node.MembershipSpec)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_MembershipSpec_To_node_MembershipSpec(a.(*MembershipSpec), b.(*node.MembershipSpec), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.MembershipSpec)(nil), (*MembershipSpec)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_MembershipSpec_To_v1alpha1_MembershipSpec(a.(*node.MembershipSpec), b.(*MembershipSpec), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*MembershipStatus)(nil), (*node.MembershipStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_MembershipStatus_To_node_MembershipStatus(a.(*MembershipStatus), b.(*node.MembershipStatus), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.MembershipStatus)(nil), (*MembershipStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_MembershipStatus_To_v1alpha1_MembershipStatus(a.(*node.MembershipStatus), b.(*MembershipStatus), scope)
 	}); err != nil {
 		return err
 	}
@@ -575,6 +655,100 @@ func Convert_node_InstallationStatus_To_v1alpha1_InstallationStatus(in *node.Ins
 	return autoConvert_node_InstallationStatus_To_v1alpha1_InstallationStatus(in, out, s)
 }
 
+func autoConvert_v1alpha1_JoinTicket_To_node_JoinTicket(in *JoinTicket, out *node.JoinTicket, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
+	if err := Convert_v1alpha1_JoinTicketSpec_To_node_JoinTicketSpec(&in.Spec, &out.Spec, s); err != nil {
+		return err
+	}
+	if err := Convert_v1alpha1_JoinTicketStatus_To_node_JoinTicketStatus(&in.Status, &out.Status, s); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Convert_v1alpha1_JoinTicket_To_node_JoinTicket is an autogenerated conversion function.
+func Convert_v1alpha1_JoinTicket_To_node_JoinTicket(in *JoinTicket, out *node.JoinTicket, s conversion.Scope) error {
+	return autoConvert_v1alpha1_JoinTicket_To_node_JoinTicket(in, out, s)
+}
+
+func autoConvert_node_JoinTicket_To_v1alpha1_JoinTicket(in *node.JoinTicket, out *JoinTicket, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
+	if err := Convert_node_JoinTicketSpec_To_v1alpha1_JoinTicketSpec(&in.Spec, &out.Spec, s); err != nil {
+		return err
+	}
+	if err := Convert_node_JoinTicketStatus_To_v1alpha1_JoinTicketStatus(&in.Status, &out.Status, s); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Convert_node_JoinTicket_To_v1alpha1_JoinTicket is an autogenerated conversion function.
+func Convert_node_JoinTicket_To_v1alpha1_JoinTicket(in *node.JoinTicket, out *JoinTicket, s conversion.Scope) error {
+	return autoConvert_node_JoinTicket_To_v1alpha1_JoinTicket(in, out, s)
+}
+
+func autoConvert_v1alpha1_JoinTicketList_To_node_JoinTicketList(in *JoinTicketList, out *node.JoinTicketList, s conversion.Scope) error {
+	out.ListMeta = in.ListMeta
+	out.Items = *(*[]node.JoinTicket)(unsafe.Pointer(&in.Items))
+	return nil
+}
+
+// Convert_v1alpha1_JoinTicketList_To_node_JoinTicketList is an autogenerated conversion function.
+func Convert_v1alpha1_JoinTicketList_To_node_JoinTicketList(in *JoinTicketList, out *node.JoinTicketList, s conversion.Scope) error {
+	return autoConvert_v1alpha1_JoinTicketList_To_node_JoinTicketList(in, out, s)
+}
+
+func autoConvert_node_JoinTicketList_To_v1alpha1_JoinTicketList(in *node.JoinTicketList, out *JoinTicketList, s conversion.Scope) error {
+	out.ListMeta = in.ListMeta
+	out.Items = *(*[]JoinTicket)(unsafe.Pointer(&in.Items))
+	return nil
+}
+
+// Convert_node_JoinTicketList_To_v1alpha1_JoinTicketList is an autogenerated conversion function.
+func Convert_node_JoinTicketList_To_v1alpha1_JoinTicketList(in *node.JoinTicketList, out *JoinTicketList, s conversion.Scope) error {
+	return autoConvert_node_JoinTicketList_To_v1alpha1_JoinTicketList(in, out, s)
+}
+
+func autoConvert_v1alpha1_JoinTicketSpec_To_node_JoinTicketSpec(in *JoinTicketSpec, out *node.JoinTicketSpec, s conversion.Scope) error {
+	*out = *(*node.JoinTicketSpec)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_v1alpha1_JoinTicketSpec_To_node_JoinTicketSpec is an autogenerated conversion function.
+func Convert_v1alpha1_JoinTicketSpec_To_node_JoinTicketSpec(in *JoinTicketSpec, out *node.JoinTicketSpec, s conversion.Scope) error {
+	return autoConvert_v1alpha1_JoinTicketSpec_To_node_JoinTicketSpec(in, out, s)
+}
+
+func autoConvert_node_JoinTicketSpec_To_v1alpha1_JoinTicketSpec(in *node.JoinTicketSpec, out *JoinTicketSpec, s conversion.Scope) error {
+	*out = *(*JoinTicketSpec)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_node_JoinTicketSpec_To_v1alpha1_JoinTicketSpec is an autogenerated conversion function.
+func Convert_node_JoinTicketSpec_To_v1alpha1_JoinTicketSpec(in *node.JoinTicketSpec, out *JoinTicketSpec, s conversion.Scope) error {
+	return autoConvert_node_JoinTicketSpec_To_v1alpha1_JoinTicketSpec(in, out, s)
+}
+
+func autoConvert_v1alpha1_JoinTicketStatus_To_node_JoinTicketStatus(in *JoinTicketStatus, out *node.JoinTicketStatus, s conversion.Scope) error {
+	*out = *(*node.JoinTicketStatus)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_v1alpha1_JoinTicketStatus_To_node_JoinTicketStatus is an autogenerated conversion function.
+func Convert_v1alpha1_JoinTicketStatus_To_node_JoinTicketStatus(in *JoinTicketStatus, out *node.JoinTicketStatus, s conversion.Scope) error {
+	return autoConvert_v1alpha1_JoinTicketStatus_To_node_JoinTicketStatus(in, out, s)
+}
+
+func autoConvert_node_JoinTicketStatus_To_v1alpha1_JoinTicketStatus(in *node.JoinTicketStatus, out *JoinTicketStatus, s conversion.Scope) error {
+	*out = *(*JoinTicketStatus)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_node_JoinTicketStatus_To_v1alpha1_JoinTicketStatus is an autogenerated conversion function.
+func Convert_node_JoinTicketStatus_To_v1alpha1_JoinTicketStatus(in *node.JoinTicketStatus, out *JoinTicketStatus, s conversion.Scope) error {
+	return autoConvert_node_JoinTicketStatus_To_v1alpha1_JoinTicketStatus(in, out, s)
+}
+
 func autoConvert_v1alpha1_Kubeconfig_To_node_Kubeconfig(in *Kubeconfig, out *node.Kubeconfig, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
 	out.Server = in.Server
@@ -619,6 +793,100 @@ func autoConvert_node_KubeconfigList_To_v1alpha1_KubeconfigList(in *node.Kubecon
 // Convert_node_KubeconfigList_To_v1alpha1_KubeconfigList is an autogenerated conversion function.
 func Convert_node_KubeconfigList_To_v1alpha1_KubeconfigList(in *node.KubeconfigList, out *KubeconfigList, s conversion.Scope) error {
 	return autoConvert_node_KubeconfigList_To_v1alpha1_KubeconfigList(in, out, s)
+}
+
+func autoConvert_v1alpha1_Membership_To_node_Membership(in *Membership, out *node.Membership, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
+	if err := Convert_v1alpha1_MembershipSpec_To_node_MembershipSpec(&in.Spec, &out.Spec, s); err != nil {
+		return err
+	}
+	if err := Convert_v1alpha1_MembershipStatus_To_node_MembershipStatus(&in.Status, &out.Status, s); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Convert_v1alpha1_Membership_To_node_Membership is an autogenerated conversion function.
+func Convert_v1alpha1_Membership_To_node_Membership(in *Membership, out *node.Membership, s conversion.Scope) error {
+	return autoConvert_v1alpha1_Membership_To_node_Membership(in, out, s)
+}
+
+func autoConvert_node_Membership_To_v1alpha1_Membership(in *node.Membership, out *Membership, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
+	if err := Convert_node_MembershipSpec_To_v1alpha1_MembershipSpec(&in.Spec, &out.Spec, s); err != nil {
+		return err
+	}
+	if err := Convert_node_MembershipStatus_To_v1alpha1_MembershipStatus(&in.Status, &out.Status, s); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Convert_node_Membership_To_v1alpha1_Membership is an autogenerated conversion function.
+func Convert_node_Membership_To_v1alpha1_Membership(in *node.Membership, out *Membership, s conversion.Scope) error {
+	return autoConvert_node_Membership_To_v1alpha1_Membership(in, out, s)
+}
+
+func autoConvert_v1alpha1_MembershipList_To_node_MembershipList(in *MembershipList, out *node.MembershipList, s conversion.Scope) error {
+	out.ListMeta = in.ListMeta
+	out.Items = *(*[]node.Membership)(unsafe.Pointer(&in.Items))
+	return nil
+}
+
+// Convert_v1alpha1_MembershipList_To_node_MembershipList is an autogenerated conversion function.
+func Convert_v1alpha1_MembershipList_To_node_MembershipList(in *MembershipList, out *node.MembershipList, s conversion.Scope) error {
+	return autoConvert_v1alpha1_MembershipList_To_node_MembershipList(in, out, s)
+}
+
+func autoConvert_node_MembershipList_To_v1alpha1_MembershipList(in *node.MembershipList, out *MembershipList, s conversion.Scope) error {
+	out.ListMeta = in.ListMeta
+	out.Items = *(*[]Membership)(unsafe.Pointer(&in.Items))
+	return nil
+}
+
+// Convert_node_MembershipList_To_v1alpha1_MembershipList is an autogenerated conversion function.
+func Convert_node_MembershipList_To_v1alpha1_MembershipList(in *node.MembershipList, out *MembershipList, s conversion.Scope) error {
+	return autoConvert_node_MembershipList_To_v1alpha1_MembershipList(in, out, s)
+}
+
+func autoConvert_v1alpha1_MembershipSpec_To_node_MembershipSpec(in *MembershipSpec, out *node.MembershipSpec, s conversion.Scope) error {
+	*out = *(*node.MembershipSpec)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_v1alpha1_MembershipSpec_To_node_MembershipSpec is an autogenerated conversion function.
+func Convert_v1alpha1_MembershipSpec_To_node_MembershipSpec(in *MembershipSpec, out *node.MembershipSpec, s conversion.Scope) error {
+	return autoConvert_v1alpha1_MembershipSpec_To_node_MembershipSpec(in, out, s)
+}
+
+func autoConvert_node_MembershipSpec_To_v1alpha1_MembershipSpec(in *node.MembershipSpec, out *MembershipSpec, s conversion.Scope) error {
+	*out = *(*MembershipSpec)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_node_MembershipSpec_To_v1alpha1_MembershipSpec is an autogenerated conversion function.
+func Convert_node_MembershipSpec_To_v1alpha1_MembershipSpec(in *node.MembershipSpec, out *MembershipSpec, s conversion.Scope) error {
+	return autoConvert_node_MembershipSpec_To_v1alpha1_MembershipSpec(in, out, s)
+}
+
+func autoConvert_v1alpha1_MembershipStatus_To_node_MembershipStatus(in *MembershipStatus, out *node.MembershipStatus, s conversion.Scope) error {
+	*out = *(*node.MembershipStatus)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_v1alpha1_MembershipStatus_To_node_MembershipStatus is an autogenerated conversion function.
+func Convert_v1alpha1_MembershipStatus_To_node_MembershipStatus(in *MembershipStatus, out *node.MembershipStatus, s conversion.Scope) error {
+	return autoConvert_v1alpha1_MembershipStatus_To_node_MembershipStatus(in, out, s)
+}
+
+func autoConvert_node_MembershipStatus_To_v1alpha1_MembershipStatus(in *node.MembershipStatus, out *MembershipStatus, s conversion.Scope) error {
+	*out = *(*MembershipStatus)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_node_MembershipStatus_To_v1alpha1_MembershipStatus is an autogenerated conversion function.
+func Convert_node_MembershipStatus_To_v1alpha1_MembershipStatus(in *node.MembershipStatus, out *MembershipStatus, s conversion.Scope) error {
+	return autoConvert_node_MembershipStatus_To_v1alpha1_MembershipStatus(in, out, s)
 }
 
 func autoConvert_v1alpha1_NodeService_To_node_NodeService(in *NodeService, out *node.NodeService, s conversion.Scope) error {

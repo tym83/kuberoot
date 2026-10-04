@@ -2,6 +2,7 @@ package nodeapi
 
 import (
 	"context"
+	cryptox509 "crypto/x509"
 	"fmt"
 	"net/http"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/request/headerrequest"
 	"k8s.io/apiserver/pkg/authentication/request/union"
 	"k8s.io/apiserver/pkg/authentication/request/x509"
+	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/authorization/authorizerfactory"
 	authorizerunion "k8s.io/apiserver/pkg/authorization/union"
@@ -49,6 +51,21 @@ type Options struct {
 	ClusterCertFile   string // serving certificate signed by the cluster CA, chosen by SNI
 	ClusterKeyFile    string
 	ClusterKubeconfig string // identity for SubjectAccessReviews against the cluster
+
+	Advertise string // this node's address in the cluster
+
+	// Control plane node: issues join tickets and serves the fleet view.
+	ClusterCAFile    string
+	ClusterCAKeyFile string
+	AdminKubeconfig  string
+	ProxyClientCert  string // identity for reaching member node APIs
+	ProxyClientKey   string
+
+	// Member node: trusts the control plane's proxy identity from this CA.
+	ProxyTrustCA string
+
+	// RoutesKubeconfig reads the nodes to route pod subnets between them.
+	RoutesKubeconfig string
 }
 
 var (
@@ -97,21 +114,51 @@ func Run(ctx context.Context, o Options) error {
 		return err
 	}
 	kinit := supervisor.NewClient()
-	group := genericapiserver.NewDefaultAPIGroupInfo(node.GroupName, scheme, metav1.ParameterCodec, codecs)
-	group.VersionedResourcesStorageMap["v1alpha1"] = map[string]rest.Storage{
-		"osconfigs":        newOSConfigStorage(o.NodeName),
-		"nodeservices":     newServiceStorage(kinit),
-		"nodeservices/log": &logStorage{kinit: kinit},
-		"kubeconfigs":      &kubeconfigStorage{files: o.Kubeconfig},
-		"disks":            diskStorage{},
-		"installations":    &installationStorage{kinit: kinit},
-		"bootentries":      bootEntryStorage{},
-		"upgrades":         &upgradeStorage{kinit: kinit},
+	storages := map[string]rest.Storage{
+		"osconfigs":     newOSConfigStorage(o.NodeName),
+		"nodeservices":  newServiceStorage(kinit),
+		"disks":         diskStorage{},
+		"installations": &installationStorage{kinit: kinit},
+		"bootentries":   bootEntryStorage{},
+		"upgrades":      &upgradeStorage{kinit: kinit},
+		"memberships":   &membershipStorage{kinit: kinit},
 	}
+	logs := &logStorage{kinit: kinit}
+	resources := map[string]rest.Storage{
+		"kubeconfigs":      &kubeconfigStorage{files: o.Kubeconfig},
+		"nodeservices/log": logs,
+	}
+	if o.AdminKubeconfig != "" {
+		admin := clientFrom(o.AdminKubeconfig)
+		if admin == nil {
+			return fmt.Errorf("admin kubeconfig %s is not usable", o.AdminKubeconfig)
+		}
+		f, err := newFleet(o.NodeName, admin, o.ClusterCAFile, o.ProxyClientCert, o.ProxyClientKey)
+		if err != nil {
+			return fmt.Errorf("fleet: %w", err)
+		}
+		for name, st := range storages {
+			storages[name] = &fleetStorage{resource: name, local: st, f: f, singleton: name == "osconfigs"}
+		}
+		resources["nodeservices/log"] = &fleetLog{local: logs, f: f}
+		tickets, err := newJoinTickets(admin, o)
+		if err != nil {
+			return fmt.Errorf("join tickets: %w", err)
+		}
+		resources["jointickets"] = tickets
+	}
+	for name, st := range storages {
+		resources[name] = st
+	}
+	group := genericapiserver.NewDefaultAPIGroupInfo(node.GroupName, scheme, metav1.ParameterCodec, codecs)
+	group.VersionedResourcesStorageMap["v1alpha1"] = resources
 	if err := server.InstallAPIGroup(&group); err != nil {
 		return err
 	}
 	go assessBoot(ctx, kinit)
+	if o.RoutesKubeconfig != "" {
+		go syncRoutes(ctx, o.RoutesKubeconfig, o.NodeName)
+	}
 	return server.PrepareRun().RunWithContext(ctx)
 }
 
@@ -133,14 +180,22 @@ func configureAuth(cfg *genericapiserver.RecommendedConfig, o Options) error {
 			return fmt.Errorf("request header CA: %w", err)
 		}
 		clientCAs = append(clientCAs, frontProxy)
-		authenticators = append(authenticators, headerrequest.NewDynamicVerifyOptionsSecure(
+		authenticators = append(authenticators, markViaCluster(headerrequest.NewDynamicVerifyOptionsSecure(
 			frontProxy.VerifyOptions,
 			headerrequest.StaticStringSlice{"front-proxy-client"},
 			headerrequest.StaticStringSlice{"X-Remote-User"},
 			headerrequest.StaticStringSlice{"X-Remote-Uid"},
 			headerrequest.StaticStringSlice{"X-Remote-Group"},
 			headerrequest.StaticStringSlice{"X-Remote-Extra-"},
-		))
+		)))
+	}
+	if o.ProxyTrustCA != "" {
+		clusterCA, err := dynamiccertificates.NewDynamicCAContentFromFile("cluster-ca", o.ProxyTrustCA)
+		if err != nil {
+			return fmt.Errorf("proxy trust CA: %w", err)
+		}
+		clientCAs = append(clientCAs, clusterCA)
+		authenticators = append(authenticators, x509.NewDynamic(clusterCA.VerifyOptions, controlPlaneProxy))
 	}
 	if o.ClusterCertFile != "" {
 		sni, err := dynamiccertificates.NewDynamicSNIContentFromFiles("cluster-serving", o.ClusterCertFile, o.ClusterKeyFile)
@@ -165,6 +220,15 @@ func configureAuth(cfg *genericapiserver.RecommendedConfig, o Options) error {
 	cfg.Authorization.Authorizer = authz
 	return nil
 }
+
+// controlPlaneProxy admits the control plane node API, which has already
+// authorized the cluster user before forwarding to this member.
+var controlPlaneProxy = x509.UserConversionFunc(func(chain []*cryptox509.Certificate) (*authenticator.Response, bool, error) {
+	if chain[0].Subject.CommonName != "kuberoot:node-api-proxy" {
+		return nil, false, nil
+	}
+	return &authenticator.Response{User: &user.DefaultInfo{Name: "kuberoot:node-api-proxy", Groups: []string{AdminGroup}}}, true, nil
+})
 
 // delegatedAuthorizer asks the cluster whether a forwarded user may do something.
 // The kubeconfig may point at a cluster that is not up yet; checks fail until it is.

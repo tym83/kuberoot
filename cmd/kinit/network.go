@@ -30,7 +30,8 @@ func setupNetwork(cfg bootConfig) (nodeInfo, error) {
 	if err := netlink.LinkSetUp(lo); err != nil {
 		return node, fmt.Errorf("loopback up: %w", err)
 	}
-	link, err := firstEthernet()
+	staticIface, staticAddr, _ := strings.Cut(cfg.static, ":")
+	link, err := firstEthernet(staticIface)
 	if err != nil {
 		return node, err
 	}
@@ -40,7 +41,35 @@ func setupNetwork(cfg bootConfig) (nodeInfo, error) {
 	mac := link.Attrs().HardwareAddr
 	node.name = fmt.Sprintf("kuberoot-%02x%02x%02x", mac[3], mac[4], mac[5])
 	node.ip, err = dhcp(link, cfg.nameservers)
-	return node, err
+	if err != nil || cfg.static == "" {
+		return node, err
+	}
+	ip, err := staticAddress(staticIface, staticAddr)
+	if err != nil {
+		return node, err
+	}
+	node.ip = ip
+	return node, nil
+}
+
+// staticAddress brings up a cluster-facing interface with a fixed address.
+func staticAddress(iface, cidr string) (net.IP, error) {
+	link, err := netlink.LinkByName(iface)
+	if err != nil {
+		return nil, fmt.Errorf("static interface %s: %w", iface, err)
+	}
+	addr, err := netlink.ParseAddr(cidr)
+	if err != nil {
+		return nil, fmt.Errorf("static address %s: %w", cidr, err)
+	}
+	if err := netlink.AddrReplace(link, addr); err != nil {
+		return nil, err
+	}
+	if err := netlink.LinkSetUp(link); err != nil {
+		return nil, err
+	}
+	log.Printf("%s: %s (static)", iface, cidr)
+	return addr.IP, nil
 }
 
 func setHostname(node nodeInfo) error {
@@ -54,13 +83,14 @@ func setHostname(node nodeInfo) error {
 	return os.WriteFile("/etc/hostname", []byte(node.name+"\n"), 0o644)
 }
 
-func firstEthernet() (netlink.Link, error) {
+// firstEthernet picks the uplink for DHCP, skipping the static interface.
+func firstEthernet(skip string) (netlink.Link, error) {
 	links, err := netlink.LinkList()
 	if err != nil {
 		return nil, err
 	}
 	for _, l := range links {
-		if l.Type() == "device" && l.Attrs().Name != "lo" && len(l.Attrs().HardwareAddr) == 6 {
+		if l.Type() == "device" && l.Attrs().Name != "lo" && l.Attrs().Name != skip && len(l.Attrs().HardwareAddr) == 6 {
 			return l, nil
 		}
 	}
