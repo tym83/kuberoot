@@ -18,7 +18,9 @@ case "$ARCH" in
 esac
 
 mkdir -p "$OUT" "$ROOT/.cache/$ARCH"
-GOOS=linux GOARCH=$ARCH CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o "$OUT/kinit" "$ROOT/cmd/kinit"
+for cmd in kinit kuberoot-node; do
+  GOOS=linux GOARCH=$ARCH CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o "$OUT/$cmd" "$ROOT/cmd/$cmd"
+done
 
 # Upstream kubelet is linked against glibc; carry just its runtime next to musl.
 rm -rf "$OUT/glibc" && mkdir -p "$OUT/glibc"
@@ -61,6 +63,7 @@ docker run --rm --platform "$PLATFORM" \
     install -m 0755 "/cache/kine-$KINE_VERSION" $r/usr/bin/kine
 
     install -m 0755 /out/kinit $r/usr/sbin/kinit
+    install -m 0755 /out/kuberoot-node $r/usr/bin/kuberoot-node
     cp -r /out/glibc/. $r/
     cp -r /overlay/. $r/
     mkdir -p $r/dev $r/proc $r/sys $r/run $r/tmp $r/var $r/etc/kubernetes $r/etc/cni/net.d

@@ -56,6 +56,10 @@ func boot() error {
 	if err := writeNodeConfig(node); err != nil {
 		return err
 	}
+	if cfg.dev {
+		printNodeKubeconfig()
+	}
+	serveControl()
 	startServices(node, cfg)
 	go applyAddons(cfg)
 	return nil

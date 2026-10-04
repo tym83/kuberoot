@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tym83/kuberoot/pkg/supervisor"
 	"golang.org/x/sys/unix"
 )
 
@@ -30,11 +31,34 @@ var (
 	children   = map[int]chan unix.WaitStatus{}
 	running    sync.Map // service name -> *os.Process
 	stopping   bool
+
+	statusMu sync.Mutex
+	statuses = map[string]*supervisor.ServiceStatus{}
 )
+
+func setStatus(name string, update func(*supervisor.ServiceStatus)) {
+	statusMu.Lock()
+	defer statusMu.Unlock()
+	s, ok := statuses[name]
+	if !ok {
+		s = &supervisor.ServiceStatus{Name: name, Cgroup: filepath.Join(serviceCgroups, name), LogFile: logPath(name)}
+		statuses[name] = s
+	}
+	update(s)
+}
+
+func logPath(name string) string { return filepath.Join("/var/log/kuberoot", name+".log") }
 
 func nodeServices(node nodeInfo) []service {
 	ip := node.ip.String()
 	return []service{
+		{"kuberoot-node", []string{"/usr/bin/kuberoot-node",
+			"--node-name=" + node.name,
+			"--tls-cert-file=" + pkiPath("node-api.crt"),
+			"--tls-private-key-file=" + pkiPath("node-api.key"),
+			"--client-ca-file=" + pkiPath("node-ca.crt"),
+			"--kubeconfigs=admin=" + kubeDir + "/admin.kubeconfig",
+		}},
 		{"containerd", []string{"/usr/bin/containerd", "--config", "/etc/containerd/config.toml"}},
 		{"kine", []string{"/usr/bin/kine",
 			"--endpoint", "sqlite:///var/lib/kine/state.db?_journal=WAL&cache=shared",
@@ -114,11 +138,17 @@ func supervise(s service, verbose bool) {
 		if stopping {
 			return
 		}
+		exit := describe(status)
 		if err != nil {
+			exit = err.Error()
 			log.Printf("%s: %v", s.name, err)
 		} else {
-			log.Printf("%s exited (%s), restarting in %s", s.name, describe(status), backoff)
+			log.Printf("%s exited (%s), restarting in %s", s.name, exit, backoff)
 		}
+		setStatus(s.name, func(st *supervisor.ServiceStatus) {
+			st.State, st.PID, st.LastExit = supervisor.StateRestarting, 0, exit
+			st.Restarts++
+		})
 		if time.Since(started) > time.Minute {
 			backoff = time.Second
 		}
@@ -128,7 +158,7 @@ func supervise(s service, verbose bool) {
 }
 
 func runService(s service, verbose bool) (unix.WaitStatus, error) {
-	logFile, err := os.OpenFile(filepath.Join("/var/log/kuberoot", s.name+".log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	logFile, err := os.OpenFile(logPath(s.name), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return 0, err
 	}
@@ -147,6 +177,9 @@ func runService(s service, verbose bool) (unix.WaitStatus, error) {
 	}
 	running.Store(s.name, cmd.Process)
 	joinCgroup(s.name, cmd.Process.Pid)
+	setStatus(s.name, func(st *supervisor.ServiceStatus) {
+		st.State, st.PID, st.StartedAt = supervisor.StateRunning, cmd.Process.Pid, time.Now()
+	})
 	status := <-done
 	running.Delete(s.name)
 	return status, nil

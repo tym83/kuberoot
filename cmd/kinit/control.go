@@ -1,0 +1,52 @@
+package main
+
+import (
+	"encoding/json"
+	"log"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
+	"sort"
+
+	"github.com/tym83/kuberoot/pkg/supervisor"
+	"golang.org/x/sys/unix"
+)
+
+// serveControl exposes service status and actions to node-local clients.
+func serveControl() {
+	if err := os.MkdirAll(filepath.Dir(supervisor.Socket), 0o700); err != nil {
+		log.Printf("control socket: %v", err)
+		return
+	}
+	_ = os.Remove(supervisor.Socket)
+	ln, err := net.Listen("unix", supervisor.Socket)
+	if err != nil {
+		log.Printf("control socket: %v", err)
+		return
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v1/services", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(serviceStatuses())
+	})
+	mux.HandleFunc("POST /v1/services/{name}/restart", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := running.Load(r.PathValue("name"))
+		if !ok {
+			http.Error(w, "service not running", http.StatusNotFound)
+			return
+		}
+		_ = p.(*os.Process).Signal(unix.SIGTERM)
+	})
+	go func() { _ = http.Serve(ln, mux) }()
+}
+
+func serviceStatuses() []supervisor.ServiceStatus {
+	statusMu.Lock()
+	defer statusMu.Unlock()
+	out := make([]supervisor.ServiceStatus, 0, len(statuses))
+	for _, s := range statuses {
+		out = append(out, *s)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}

@@ -16,6 +16,9 @@ const (
 	podCIDR     = "10.244.0.0/24"
 	clusterDNS  = "10.96.0.10"
 	apiServer   = "https://127.0.0.1:6443"
+
+	nodeAPIServer       = "https://127.0.0.1:50000"
+	nodeAdminKubeconfig = "/etc/kuberoot/node-admin.kubeconfig"
 )
 
 // writeNodeConfig generates the PKI and every config file the node services read.
@@ -26,18 +29,23 @@ func writeNodeConfig(node nodeInfo) error {
 	id := make([]byte, 16)
 	_, _ = rand.Read(id)
 	files := map[string]string{
-		"/etc/machine-id":                         hex.EncodeToString(id) + "\n",
-		"/etc/containerd/config.toml":             containerdConfig,
-		"/etc/cni/net.d/10-kuberoot.conflist":     fmt.Sprintf(cniConfig, podCIDR),
-		filepath.Join(kubeDir, "kubelet.yaml"):    fmt.Sprintf(kubeletConfig, pkiPath("ca.crt"), clusterDNS, pkiPath("kubelet-server.crt"), pkiPath("kubelet-server.key")),
+		"/etc/machine-id":                      hex.EncodeToString(id) + "\n",
+		"/etc/containerd/config.toml":          containerdConfig,
+		"/etc/cni/net.d/10-kuberoot.conflist":  fmt.Sprintf(cniConfig, podCIDR),
+		filepath.Join(kubeDir, "kubelet.yaml"): fmt.Sprintf(kubeletConfig, pkiPath("ca.crt"), clusterDNS, pkiPath("kubelet-server.crt"), pkiPath("kubelet-server.key")),
 	}
 	for _, user := range []string{"admin", "controller-manager", "scheduler", "kube-proxy", "kubelet-client"} {
-		kc, err := kubeconfig(apiServer, user)
+		kc, err := kubeconfig(apiServer, "ca.crt", "kuberoot", user)
 		if err != nil {
 			return err
 		}
 		files[filepath.Join(kubeDir, user+".kubeconfig")] = kc
 	}
+	nodeAdmin, err := kubeconfig(nodeAPIServer, "node-ca.crt", node.name, "node-admin")
+	if err != nil {
+		return err
+	}
+	files[nodeAdminKubeconfig] = nodeAdmin
 	for path, content := range files {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return err
@@ -55,12 +63,12 @@ func writeNodeConfig(node nodeInfo) error {
 }
 
 // kubeconfig embeds the credentials so the file is usable off the node too.
-func kubeconfig(server, user string) (string, error) {
+func kubeconfig(server, caFile, name, user string) (string, error) {
 	b64 := func(name string) (string, error) {
 		raw, err := os.ReadFile(pkiPath(name))
 		return base64.StdEncoding.EncodeToString(raw), err
 	}
-	ca, err := b64("ca.crt")
+	ca, err := b64(caFile)
 	if err != nil {
 		return "", err
 	}
@@ -75,22 +83,22 @@ func kubeconfig(server, user string) (string, error) {
 	return fmt.Sprintf(`apiVersion: v1
 kind: Config
 clusters:
-- name: kuberoot
+- name: %[1]s
   cluster:
-    server: %s
-    certificate-authority-data: %s
+    server: %[2]s
+    certificate-authority-data: %[3]s
 users:
-- name: %s
+- name: %[1]s-%[4]s
   user:
-    client-certificate-data: %s
-    client-key-data: %s
+    client-certificate-data: %[5]s
+    client-key-data: %[6]s
 contexts:
-- name: kuberoot
+- name: %[1]s
   context:
-    cluster: kuberoot
-    user: %s
-current-context: kuberoot
-`, server, ca, user, crt, key, user), nil
+    cluster: %[1]s
+    user: %[1]s-%[4]s
+current-context: %[1]s
+`, name, server, ca, user, crt, key), nil
 }
 
 const containerdConfig = `version = 3

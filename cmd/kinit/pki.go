@@ -83,6 +83,29 @@ func createPKI(node nodeInfo) error {
 			return fmt.Errorf("issue %s: %w", s.file, err)
 		}
 	}
+	return createNodePKI(node)
+}
+
+// createNodePKI issues the node's own trust root, separate from the cluster's:
+// the node API exists before a cluster does and outlives it.
+func createNodePKI(node nodeInfo) error {
+	ca, err := newAuthority("kuberoot-node-ca " + node.name)
+	if err != nil {
+		return err
+	}
+	if err := writePEM("node-ca.crt", "CERTIFICATE", ca.cert.Raw); err != nil {
+		return err
+	}
+	for _, s := range []certSpec{
+		{file: "node-api", commonName: node.name, usages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+			dnsNames: []string{node.name, "localhost"}, ips: []net.IP{node.ip, net.ParseIP("127.0.0.1")}},
+		{file: "node-admin", commonName: "kuberoot-node-admin", orgs: []string{"kuberoot:node-admins"},
+			usages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}},
+	} {
+		if err := ca.issue(s); err != nil {
+			return fmt.Errorf("issue %s: %w", s.file, err)
+		}
+	}
 	return nil
 }
 

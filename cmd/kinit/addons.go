@@ -31,9 +31,6 @@ func applyAddons(cfg bootConfig) {
 		time.Sleep(time.Second)
 	}
 	log.Printf("kube-apiserver ready, uptime %s", uptime())
-	if cfg.dev {
-		printAdminKubeconfig()
-	}
 	for {
 		cmd := exec.Command("/usr/bin/kubectl", "--kubeconfig", kubeDir+"/admin.kubeconfig", "apply", "--server-side", "-f", addonsDir)
 		cmd.Env = servicePath
@@ -69,10 +66,10 @@ func adminClient() (*http.Client, error) {
 	}, nil
 }
 
-// printAdminKubeconfig hands the admin credentials to a development host over the
-// serial console. It exists only until the node API serves them properly.
-func printAdminKubeconfig() {
-	raw, err := os.ReadFile(kubeDir + "/admin.kubeconfig")
+// printNodeKubeconfig hands the node admin credentials to a development host over
+// the serial console. The installer will take over this job.
+func printNodeKubeconfig() {
+	raw, err := os.ReadFile(nodeAdminKubeconfig)
 	if err != nil {
 		return
 	}
