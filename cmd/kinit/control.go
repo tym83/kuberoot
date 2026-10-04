@@ -37,6 +37,9 @@ func serveControl() {
 		}
 		_ = p.(*os.Process).Signal(unix.SIGTERM)
 	})
+	mux.HandleFunc("POST /v1/reboot", func(http.ResponseWriter, *http.Request) {
+		go shutdown(unix.SIGINT)
+	})
 	go func() { _ = http.Serve(ln, mux) }()
 }
 

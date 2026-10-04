@@ -23,6 +23,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&OSConfig{}, &OSConfigList{},
 		&NodeService{}, &NodeServiceList{},
 		&Kubeconfig{}, &KubeconfigList{},
+		&Disk{}, &DiskList{},
+		&Installation{}, &InstallationList{},
 	)
 	return nil
 }

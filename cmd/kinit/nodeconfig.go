@@ -27,10 +27,12 @@ func writeNodeConfig(node nodeInfo) error {
 	if err := createPKI(node); err != nil {
 		return fmt.Errorf("pki: %w", err)
 	}
-	id := make([]byte, 16)
-	_, _ = rand.Read(id)
+	machineID, err := persistentMachineID()
+	if err != nil {
+		return err
+	}
 	files := map[string]string{
-		"/etc/machine-id":                      hex.EncodeToString(id) + "\n",
+		"/etc/machine-id":                      machineID + "\n",
 		"/etc/containerd/config.toml":          containerdConfig,
 		"/etc/cni/net.d/10-kuberoot.conflist":  fmt.Sprintf(cniConfig, podCIDR),
 		filepath.Join(kubeDir, "kubelet.yaml"): fmt.Sprintf(kubeletConfig, pkiPath("ca.crt"), clusterDNS, pkiPath("kubelet-server.crt"), pkiPath("kubelet-server.key")),

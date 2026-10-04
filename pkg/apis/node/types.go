@@ -16,21 +16,23 @@ type OSConfig struct {
 
 type OSConfigSpec struct {
 	// Nameservers replace the DNS servers handed out by DHCP.
+	// +listType=atomic
 	Nameservers []string `json:"nameservers,omitempty"`
 	// Sysctls are kernel parameters applied on top of the distro defaults.
 	Sysctls map[string]string `json:"sysctls,omitempty"`
 }
 
 type OSConfigStatus struct {
-	Distro        string      `json:"distro,omitempty"`
-	Version       string      `json:"version,omitempty"`
-	KernelVersion string      `json:"kernelVersion,omitempty"`
-	Architecture  string      `json:"architecture,omitempty"`
-	Hostname      string      `json:"hostname,omitempty"`
-	Addresses     []string    `json:"addresses,omitempty"`
-	BootTime      metav1.Time `json:"bootTime,omitempty"`
-	MemoryTotal   int64       `json:"memoryTotal,omitempty"`
-	MemoryFree    int64       `json:"memoryFree,omitempty"`
+	Distro        string `json:"distro,omitempty"`
+	Version       string `json:"version,omitempty"`
+	KernelVersion string `json:"kernelVersion,omitempty"`
+	Architecture  string `json:"architecture,omitempty"`
+	Hostname      string `json:"hostname,omitempty"`
+	// +listType=atomic
+	Addresses   []string    `json:"addresses,omitempty"`
+	BootTime    metav1.Time `json:"bootTime,omitempty"`
+	MemoryTotal int64       `json:"memoryTotal,omitempty"`
+	MemoryFree  int64       `json:"memoryFree,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -97,4 +99,70 @@ type KubeconfigList struct {
 	Items []Kubeconfig `json:"items"`
 }
 
+// Disk is a block device of the node.
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +genclient:nonNamespaced
+type Disk struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
+	Status DiskStatus `json:"status,omitempty"`
+}
+
+type DiskStatus struct {
+	SizeBytes int64  `json:"sizeBytes,omitempty"`
+	Model     string `json:"model,omitempty"`
+	Removable bool   `json:"removable,omitempty"`
+	// Role is what kuberoot uses the disk for: BootMedia, System or empty when free.
+	Role string `json:"role,omitempty"`
+	// +listType=atomic
+	Partitions []DiskPartition `json:"partitions,omitempty"`
+}
+
+type DiskPartition struct {
+	Name      string `json:"name"`
+	Label     string `json:"label,omitempty"`
+	SizeBytes int64  `json:"sizeBytes,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type DiskList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []Disk `json:"items"`
+}
+
+// Installation writes kuberoot from the boot media onto a disk of this node.
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +genclient:nonNamespaced
+type Installation struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   InstallationSpec   `json:"spec,omitempty"`
+	Status InstallationStatus `json:"status,omitempty"`
+}
+
+type InstallationSpec struct {
+	// Disk is the name of the target disk; everything on it is erased.
+	Disk string `json:"disk"`
+	// Reboot into the installed system when done.
+	Reboot bool `json:"reboot,omitempty"`
+}
+
+type InstallationStatus struct {
+	Phase       string       `json:"phase,omitempty"`
+	Message     string       `json:"message,omitempty"`
+	Progress    int32        `json:"progress"`
+	StartedAt   *metav1.Time `json:"startedAt,omitempty"`
+	CompletedAt *metav1.Time `json:"completedAt,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type InstallationList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []Installation `json:"items"`
+}

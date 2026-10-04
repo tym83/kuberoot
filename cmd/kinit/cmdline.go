@@ -13,6 +13,8 @@ type bootConfig struct {
 	verbose bool
 	// nameservers override the DNS servers handed out by DHCP.
 	nameservers []string
+	// install runs the console installer: the system booted from boot media.
+	install bool
 }
 
 func loadCmdline() bootConfig {
@@ -24,6 +26,8 @@ func loadCmdline() bootConfig {
 			cfg.dev = true
 		case "kuberoot.verbose":
 			cfg.verbose = true
+		case "kuberoot.mode=install":
+			cfg.install = true
 		default:
 			if v, ok := strings.CutPrefix(f, "kuberoot.nameserver="); ok {
 				cfg.nameservers = append(cfg.nameservers, strings.Split(v, ",")...)

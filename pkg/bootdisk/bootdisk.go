@@ -134,7 +134,7 @@ func SlotEntry(a Artifacts, slot, version string) Entry {
 		Version: version,
 		Kernel:  "/kuberoot/" + slot + "/vmlinuz.efi",
 		Initrd:  "/kuberoot/" + slot + "/initrd.cpio",
-		Options: strings.TrimSpace("kuberoot.root=PARTLABEL=" + RootLabel(slot) + " " + a.ConsoleArg),
+		Options: strings.TrimSpace("kuberoot.root=PARTLABEL=" + RootLabel(slot) + " quiet " + a.ConsoleArg),
 	}
 }
 

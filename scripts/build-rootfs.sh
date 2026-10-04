@@ -18,7 +18,7 @@ case "$ARCH" in
 esac
 
 mkdir -p "$OUT" "$ROOT/.cache/$ARCH"
-for cmd in kinit kuberoot-node; do
+for cmd in kinit kuberoot-node kuberoot-installer; do
   GOOS=linux GOARCH=$ARCH CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o "$OUT/$cmd" "$ROOT/cmd/$cmd"
 done
 
@@ -45,7 +45,7 @@ docker run --rm --platform "$PLATFORM" \
     cp -r /etc/apk/keys $r/etc/apk/
     cp /etc/apk/repositories $r/etc/apk/
     apk add -q --root $r --initdb --no-scripts --no-cache \
-      nftables mount umount conntrack-tools ca-certificates-bundle
+      nftables mount umount conntrack-tools ca-certificates-bundle e2fsprogs
     rm -rf $r/etc/apk $r/lib/apk $r/var/cache/apk
 
     for b in kube-apiserver kube-controller-manager kube-scheduler kubelet kube-proxy kubectl; do
@@ -64,6 +64,7 @@ docker run --rm --platform "$PLATFORM" \
 
     install -m 0755 /out/kinit $r/usr/sbin/kinit
     install -m 0755 /out/kuberoot-node $r/usr/bin/kuberoot-node
+    install -m 0755 /out/kuberoot-installer $r/usr/bin/kuberoot-installer
     cp -r /out/glibc/. $r/
     cp -r /overlay/. $r/
     mkdir -p $r/dev $r/proc $r/sys $r/run $r/tmp $r/var $r/etc/kubernetes $r/etc/cni/net.d

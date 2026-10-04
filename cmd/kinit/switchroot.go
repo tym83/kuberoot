@@ -54,7 +54,9 @@ func switchRoot() error {
 		if err != nil {
 			return err
 		}
-		if err := unix.Mount(state, newRoot+"/var", "ext4", unix.MS_NOSUID|unix.MS_NODEV, ""); err != nil {
+		// data=journal: edge nodes lose power mid-write, and delayed allocation
+		// would leave freshly unpacked image layers as zero-filled files.
+		if err := unix.Mount(state, newRoot+"/var", "ext4", unix.MS_NOSUID|unix.MS_NODEV, "data=journal"); err != nil {
 			return fmt.Errorf("mount state: %w", err)
 		}
 	}

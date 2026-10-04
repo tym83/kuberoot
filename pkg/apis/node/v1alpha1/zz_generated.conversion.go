@@ -36,6 +36,86 @@ func init() {
 // RegisterConversions adds conversion functions to the given scheme.
 // Public to allow building arbitrary schemes.
 func RegisterConversions(s *runtime.Scheme) error {
+	if err := s.AddGeneratedConversionFunc((*Disk)(nil), (*node.Disk)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_Disk_To_node_Disk(a.(*Disk), b.(*node.Disk), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.Disk)(nil), (*Disk)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_Disk_To_v1alpha1_Disk(a.(*node.Disk), b.(*Disk), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*DiskList)(nil), (*node.DiskList)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_DiskList_To_node_DiskList(a.(*DiskList), b.(*node.DiskList), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.DiskList)(nil), (*DiskList)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_DiskList_To_v1alpha1_DiskList(a.(*node.DiskList), b.(*DiskList), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*DiskPartition)(nil), (*node.DiskPartition)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_DiskPartition_To_node_DiskPartition(a.(*DiskPartition), b.(*node.DiskPartition), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.DiskPartition)(nil), (*DiskPartition)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_DiskPartition_To_v1alpha1_DiskPartition(a.(*node.DiskPartition), b.(*DiskPartition), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*DiskStatus)(nil), (*node.DiskStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_DiskStatus_To_node_DiskStatus(a.(*DiskStatus), b.(*node.DiskStatus), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.DiskStatus)(nil), (*DiskStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_DiskStatus_To_v1alpha1_DiskStatus(a.(*node.DiskStatus), b.(*DiskStatus), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*Installation)(nil), (*node.Installation)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_Installation_To_node_Installation(a.(*Installation), b.(*node.Installation), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.Installation)(nil), (*Installation)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_Installation_To_v1alpha1_Installation(a.(*node.Installation), b.(*Installation), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*InstallationList)(nil), (*node.InstallationList)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_InstallationList_To_node_InstallationList(a.(*InstallationList), b.(*node.InstallationList), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.InstallationList)(nil), (*InstallationList)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_InstallationList_To_v1alpha1_InstallationList(a.(*node.InstallationList), b.(*InstallationList), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*InstallationSpec)(nil), (*node.InstallationSpec)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_InstallationSpec_To_node_InstallationSpec(a.(*InstallationSpec), b.(*node.InstallationSpec), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.InstallationSpec)(nil), (*InstallationSpec)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_InstallationSpec_To_v1alpha1_InstallationSpec(a.(*node.InstallationSpec), b.(*InstallationSpec), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*InstallationStatus)(nil), (*node.InstallationStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_InstallationStatus_To_node_InstallationStatus(a.(*InstallationStatus), b.(*node.InstallationStatus), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.InstallationStatus)(nil), (*InstallationStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_InstallationStatus_To_v1alpha1_InstallationStatus(a.(*node.InstallationStatus), b.(*InstallationStatus), scope)
+	}); err != nil {
+		return err
+	}
 	if err := s.AddGeneratedConversionFunc((*Kubeconfig)(nil), (*node.Kubeconfig)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1alpha1_Kubeconfig_To_node_Kubeconfig(a.(*Kubeconfig), b.(*node.Kubeconfig), scope)
 	}); err != nil {
@@ -137,6 +217,188 @@ func RegisterConversions(s *runtime.Scheme) error {
 		return err
 	}
 	return nil
+}
+
+func autoConvert_v1alpha1_Disk_To_node_Disk(in *Disk, out *node.Disk, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
+	if err := Convert_v1alpha1_DiskStatus_To_node_DiskStatus(&in.Status, &out.Status, s); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Convert_v1alpha1_Disk_To_node_Disk is an autogenerated conversion function.
+func Convert_v1alpha1_Disk_To_node_Disk(in *Disk, out *node.Disk, s conversion.Scope) error {
+	return autoConvert_v1alpha1_Disk_To_node_Disk(in, out, s)
+}
+
+func autoConvert_node_Disk_To_v1alpha1_Disk(in *node.Disk, out *Disk, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
+	if err := Convert_node_DiskStatus_To_v1alpha1_DiskStatus(&in.Status, &out.Status, s); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Convert_node_Disk_To_v1alpha1_Disk is an autogenerated conversion function.
+func Convert_node_Disk_To_v1alpha1_Disk(in *node.Disk, out *Disk, s conversion.Scope) error {
+	return autoConvert_node_Disk_To_v1alpha1_Disk(in, out, s)
+}
+
+func autoConvert_v1alpha1_DiskList_To_node_DiskList(in *DiskList, out *node.DiskList, s conversion.Scope) error {
+	out.ListMeta = in.ListMeta
+	out.Items = *(*[]node.Disk)(unsafe.Pointer(&in.Items))
+	return nil
+}
+
+// Convert_v1alpha1_DiskList_To_node_DiskList is an autogenerated conversion function.
+func Convert_v1alpha1_DiskList_To_node_DiskList(in *DiskList, out *node.DiskList, s conversion.Scope) error {
+	return autoConvert_v1alpha1_DiskList_To_node_DiskList(in, out, s)
+}
+
+func autoConvert_node_DiskList_To_v1alpha1_DiskList(in *node.DiskList, out *DiskList, s conversion.Scope) error {
+	out.ListMeta = in.ListMeta
+	out.Items = *(*[]Disk)(unsafe.Pointer(&in.Items))
+	return nil
+}
+
+// Convert_node_DiskList_To_v1alpha1_DiskList is an autogenerated conversion function.
+func Convert_node_DiskList_To_v1alpha1_DiskList(in *node.DiskList, out *DiskList, s conversion.Scope) error {
+	return autoConvert_node_DiskList_To_v1alpha1_DiskList(in, out, s)
+}
+
+func autoConvert_v1alpha1_DiskPartition_To_node_DiskPartition(in *DiskPartition, out *node.DiskPartition, s conversion.Scope) error {
+	*out = *(*node.DiskPartition)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_v1alpha1_DiskPartition_To_node_DiskPartition is an autogenerated conversion function.
+func Convert_v1alpha1_DiskPartition_To_node_DiskPartition(in *DiskPartition, out *node.DiskPartition, s conversion.Scope) error {
+	return autoConvert_v1alpha1_DiskPartition_To_node_DiskPartition(in, out, s)
+}
+
+func autoConvert_node_DiskPartition_To_v1alpha1_DiskPartition(in *node.DiskPartition, out *DiskPartition, s conversion.Scope) error {
+	*out = *(*DiskPartition)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_node_DiskPartition_To_v1alpha1_DiskPartition is an autogenerated conversion function.
+func Convert_node_DiskPartition_To_v1alpha1_DiskPartition(in *node.DiskPartition, out *DiskPartition, s conversion.Scope) error {
+	return autoConvert_node_DiskPartition_To_v1alpha1_DiskPartition(in, out, s)
+}
+
+func autoConvert_v1alpha1_DiskStatus_To_node_DiskStatus(in *DiskStatus, out *node.DiskStatus, s conversion.Scope) error {
+	*out = *(*node.DiskStatus)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_v1alpha1_DiskStatus_To_node_DiskStatus is an autogenerated conversion function.
+func Convert_v1alpha1_DiskStatus_To_node_DiskStatus(in *DiskStatus, out *node.DiskStatus, s conversion.Scope) error {
+	return autoConvert_v1alpha1_DiskStatus_To_node_DiskStatus(in, out, s)
+}
+
+func autoConvert_node_DiskStatus_To_v1alpha1_DiskStatus(in *node.DiskStatus, out *DiskStatus, s conversion.Scope) error {
+	*out = *(*DiskStatus)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_node_DiskStatus_To_v1alpha1_DiskStatus is an autogenerated conversion function.
+func Convert_node_DiskStatus_To_v1alpha1_DiskStatus(in *node.DiskStatus, out *DiskStatus, s conversion.Scope) error {
+	return autoConvert_node_DiskStatus_To_v1alpha1_DiskStatus(in, out, s)
+}
+
+func autoConvert_v1alpha1_Installation_To_node_Installation(in *Installation, out *node.Installation, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
+	if err := Convert_v1alpha1_InstallationSpec_To_node_InstallationSpec(&in.Spec, &out.Spec, s); err != nil {
+		return err
+	}
+	if err := Convert_v1alpha1_InstallationStatus_To_node_InstallationStatus(&in.Status, &out.Status, s); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Convert_v1alpha1_Installation_To_node_Installation is an autogenerated conversion function.
+func Convert_v1alpha1_Installation_To_node_Installation(in *Installation, out *node.Installation, s conversion.Scope) error {
+	return autoConvert_v1alpha1_Installation_To_node_Installation(in, out, s)
+}
+
+func autoConvert_node_Installation_To_v1alpha1_Installation(in *node.Installation, out *Installation, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
+	if err := Convert_node_InstallationSpec_To_v1alpha1_InstallationSpec(&in.Spec, &out.Spec, s); err != nil {
+		return err
+	}
+	if err := Convert_node_InstallationStatus_To_v1alpha1_InstallationStatus(&in.Status, &out.Status, s); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Convert_node_Installation_To_v1alpha1_Installation is an autogenerated conversion function.
+func Convert_node_Installation_To_v1alpha1_Installation(in *node.Installation, out *Installation, s conversion.Scope) error {
+	return autoConvert_node_Installation_To_v1alpha1_Installation(in, out, s)
+}
+
+func autoConvert_v1alpha1_InstallationList_To_node_InstallationList(in *InstallationList, out *node.InstallationList, s conversion.Scope) error {
+	out.ListMeta = in.ListMeta
+	out.Items = *(*[]node.Installation)(unsafe.Pointer(&in.Items))
+	return nil
+}
+
+// Convert_v1alpha1_InstallationList_To_node_InstallationList is an autogenerated conversion function.
+func Convert_v1alpha1_InstallationList_To_node_InstallationList(in *InstallationList, out *node.InstallationList, s conversion.Scope) error {
+	return autoConvert_v1alpha1_InstallationList_To_node_InstallationList(in, out, s)
+}
+
+func autoConvert_node_InstallationList_To_v1alpha1_InstallationList(in *node.InstallationList, out *InstallationList, s conversion.Scope) error {
+	out.ListMeta = in.ListMeta
+	out.Items = *(*[]Installation)(unsafe.Pointer(&in.Items))
+	return nil
+}
+
+// Convert_node_InstallationList_To_v1alpha1_InstallationList is an autogenerated conversion function.
+func Convert_node_InstallationList_To_v1alpha1_InstallationList(in *node.InstallationList, out *InstallationList, s conversion.Scope) error {
+	return autoConvert_node_InstallationList_To_v1alpha1_InstallationList(in, out, s)
+}
+
+func autoConvert_v1alpha1_InstallationSpec_To_node_InstallationSpec(in *InstallationSpec, out *node.InstallationSpec, s conversion.Scope) error {
+	*out = *(*node.InstallationSpec)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_v1alpha1_InstallationSpec_To_node_InstallationSpec is an autogenerated conversion function.
+func Convert_v1alpha1_InstallationSpec_To_node_InstallationSpec(in *InstallationSpec, out *node.InstallationSpec, s conversion.Scope) error {
+	return autoConvert_v1alpha1_InstallationSpec_To_node_InstallationSpec(in, out, s)
+}
+
+func autoConvert_node_InstallationSpec_To_v1alpha1_InstallationSpec(in *node.InstallationSpec, out *InstallationSpec, s conversion.Scope) error {
+	*out = *(*InstallationSpec)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_node_InstallationSpec_To_v1alpha1_InstallationSpec is an autogenerated conversion function.
+func Convert_node_InstallationSpec_To_v1alpha1_InstallationSpec(in *node.InstallationSpec, out *InstallationSpec, s conversion.Scope) error {
+	return autoConvert_node_InstallationSpec_To_v1alpha1_InstallationSpec(in, out, s)
+}
+
+func autoConvert_v1alpha1_InstallationStatus_To_node_InstallationStatus(in *InstallationStatus, out *node.InstallationStatus, s conversion.Scope) error {
+	*out = *(*node.InstallationStatus)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_v1alpha1_InstallationStatus_To_node_InstallationStatus is an autogenerated conversion function.
+func Convert_v1alpha1_InstallationStatus_To_node_InstallationStatus(in *InstallationStatus, out *node.InstallationStatus, s conversion.Scope) error {
+	return autoConvert_v1alpha1_InstallationStatus_To_node_InstallationStatus(in, out, s)
+}
+
+func autoConvert_node_InstallationStatus_To_v1alpha1_InstallationStatus(in *node.InstallationStatus, out *InstallationStatus, s conversion.Scope) error {
+	*out = *(*InstallationStatus)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_node_InstallationStatus_To_v1alpha1_InstallationStatus is an autogenerated conversion function.
+func Convert_node_InstallationStatus_To_v1alpha1_InstallationStatus(in *node.InstallationStatus, out *InstallationStatus, s conversion.Scope) error {
+	return autoConvert_node_InstallationStatus_To_v1alpha1_InstallationStatus(in, out, s)
 }
 
 func autoConvert_v1alpha1_Kubeconfig_To_node_Kubeconfig(in *Kubeconfig, out *node.Kubeconfig, s conversion.Scope) error {

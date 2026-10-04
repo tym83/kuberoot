@@ -19,15 +19,20 @@ import (
 func main() {
 	var a bootdisk.Artifacts
 	var out string
+	var dev bool
 	flag.StringVar(&a.Dir, "artifacts", "", "directory with vmlinuz.efi, initrd.cpio, rootfs.squashfs, systemd-boot.efi")
 	flag.StringVar(&a.Arch, "arch", "arm64", "target architecture")
 	flag.StringVar(&a.Version, "version", "0.1.0-dev", "release version")
 	flag.StringVar(&out, "out", "", "image file to create")
+	flag.BoolVar(&dev, "dev", false, "development media: print node credentials on the console")
 	flag.Parse()
 	if a.Dir == "" || out == "" {
 		log.Fatal("--artifacts and --out are required")
 	}
 	a.ConsoleArg = consoleFor(a.Arch)
+	if dev {
+		a.ConsoleArg += " kuberoot.dev kuberoot.nameserver=1.1.1.1"
+	}
 	if err := build(a, out); err != nil {
 		log.Fatal(err)
 	}
@@ -82,7 +87,7 @@ func build(a bootdisk.Artifacts, out string) error {
 		Initrd:  "/kuberoot/initrd.cpio",
 		Options: strings.Join([]string{
 			"kuberoot.root=PARTLABEL=" + bootdisk.MediaLabel + ":/kuberoot/rootfs.squashfs",
-			"kuberoot.mode=install", a.ConsoleArg,
+			"kuberoot.mode=install", "quiet", a.ConsoleArg,
 		}, " "),
 	}
 	if err := bootdisk.WriteFile(fs, "/loader/entries/kuberoot-install.conf", strings.NewReader(install.String())); err != nil {

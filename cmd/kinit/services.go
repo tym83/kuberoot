@@ -22,6 +22,8 @@ var servicePath = []string{"PATH=/usr/sbin:/usr/bin:/sbin:/bin"}
 type service struct {
 	name string
 	args []string
+	// console attaches the service to the system console as its controlling terminal.
+	console bool
 }
 
 // children maps the PIDs kinit started to the channel waiting for their exit.
@@ -52,18 +54,18 @@ func logPath(name string) string { return filepath.Join("/var/log/kuberoot", nam
 func nodeServices(node nodeInfo) []service {
 	ip := node.ip.String()
 	return []service{
-		{"kuberoot-node", []string{"/usr/bin/kuberoot-node",
+		{name: "kuberoot-node", args: []string{"/usr/bin/kuberoot-node",
 			"--node-name=" + node.name,
 			"--tls-cert-file=" + pkiPath("node-api.crt"),
 			"--tls-private-key-file=" + pkiPath("node-api.key"),
 			"--client-ca-file=" + pkiPath("node-ca.crt"),
 			"--kubeconfigs=admin=" + kubeDir + "/admin.kubeconfig",
 		}},
-		{"containerd", []string{"/usr/bin/containerd", "--config", "/etc/containerd/config.toml"}},
-		{"kine", []string{"/usr/bin/kine",
-			"--endpoint", "sqlite:///var/lib/kine/state.db?_journal=WAL&cache=shared",
+		{name: "containerd", args: []string{"/usr/bin/containerd", "--config", "/etc/containerd/config.toml"}},
+		{name: "kine", args: []string{"/usr/bin/kine",
+			"--endpoint", "sqlite:///var/lib/kine/state.db?_journal=WAL&_synchronous=FULL&cache=shared",
 			"--listen-address", "127.0.0.1:2379"}},
-		{"kube-apiserver", []string{"/usr/bin/kube-apiserver",
+		{name: "kube-apiserver", args: []string{"/usr/bin/kube-apiserver",
 			"--etcd-servers=http://127.0.0.1:2379",
 			"--advertise-address=" + ip,
 			"--secure-port=6443",
@@ -82,7 +84,7 @@ func nodeServices(node nodeInfo) []service {
 			"--enable-admission-plugins=NodeRestriction",
 			"--allow-privileged=true",
 		}},
-		{"kube-controller-manager", []string{"/usr/bin/kube-controller-manager",
+		{name: "kube-controller-manager", args: []string{"/usr/bin/kube-controller-manager",
 			"--kubeconfig=" + kubeDir + "/controller-manager.kubeconfig",
 			"--authentication-kubeconfig=" + kubeDir + "/controller-manager.kubeconfig",
 			"--authorization-kubeconfig=" + kubeDir + "/controller-manager.kubeconfig",
@@ -93,19 +95,19 @@ func nodeServices(node nodeInfo) []service {
 			"--use-service-account-credentials=true",
 			"--leader-elect=false",
 		}},
-		{"kube-scheduler", []string{"/usr/bin/kube-scheduler",
+		{name: "kube-scheduler", args: []string{"/usr/bin/kube-scheduler",
 			"--kubeconfig=" + kubeDir + "/scheduler.kubeconfig",
 			"--authentication-kubeconfig=" + kubeDir + "/scheduler.kubeconfig",
 			"--authorization-kubeconfig=" + kubeDir + "/scheduler.kubeconfig",
 			"--leader-elect=false",
 		}},
-		{"kubelet", []string{"/usr/bin/kubelet",
+		{name: "kubelet", args: []string{"/usr/bin/kubelet",
 			"--config=" + kubeDir + "/kubelet.yaml",
 			"--kubeconfig=" + kubeDir + "/kubelet-client.kubeconfig",
 			"--hostname-override=" + node.name,
 			"--node-ip=" + ip,
 		}},
-		{"kube-proxy", []string{"/usr/bin/kube-proxy",
+		{name: "kube-proxy", args: []string{"/usr/bin/kube-proxy",
 			"--kubeconfig=" + kubeDir + "/kube-proxy.kubeconfig",
 			"--proxy-mode=nftables",
 			"--cluster-cidr=" + clusterCIDR,
@@ -115,6 +117,16 @@ func nodeServices(node nodeInfo) []service {
 }
 
 func startServices(node nodeInfo, cfg bootConfig) {
+	services := nodeServices(node)
+	if cfg.install {
+		services = append(services, service{name: "installer", args: []string{"/usr/bin/kuberoot-installer"}, console: true})
+		// From here on the console belongs to the installer screen: kernel
+		// messages and kinit's own log stay off it.
+		_ = os.WriteFile("/proc/sys/kernel/printk", []byte("1"), 0o644)
+		if f, err := os.OpenFile(logPath("kinit"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644); err == nil {
+			log.SetOutput(f)
+		}
+	}
 	// Inherited by every service and, through containerd, by containers.
 	limit := &unix.Rlimit{Cur: 1 << 20, Max: 1 << 20}
 	if err := unix.Setrlimit(unix.RLIMIT_NOFILE, limit); err != nil {
@@ -124,7 +136,7 @@ func startServices(node nodeInfo, cfg bootConfig) {
 	_ = os.WriteFile("/sys/fs/cgroup/cgroup.subtree_control", controllers, 0o644)
 	_ = os.MkdirAll(serviceCgroups, 0o755)
 	_ = os.WriteFile(filepath.Join(serviceCgroups, "cgroup.subtree_control"), controllers, 0o644)
-	for _, s := range nodeServices(node) {
+	for _, s := range services {
 		go supervise(s, cfg.verbose)
 	}
 }
@@ -171,6 +183,16 @@ func runService(s service, verbose bool) (unix.WaitStatus, error) {
 	cmd.Env = servicePath
 	cmd.Stdout, cmd.Stderr = out, out
 	cmd.SysProcAttr = &unix.SysProcAttr{Setsid: true}
+	if s.console {
+		tty, err := os.OpenFile("/dev/console", os.O_RDWR, 0)
+		if err != nil {
+			return 0, err
+		}
+		defer tty.Close()
+		cmd.Stdin, cmd.Stdout, cmd.Stderr = tty, tty, tty
+		cmd.Env = append(cmd.Env, "TERM=linux")
+		cmd.SysProcAttr = &unix.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
+	}
 	done, err := spawn(cmd)
 	if err != nil {
 		return 0, err

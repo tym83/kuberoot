@@ -72,3 +72,16 @@ func (c *Client) Restart(ctx context.Context, name string) error {
 	}
 	return nil
 }
+
+// Reboot asks kinit to stop the services and restart the machine.
+func (c *Client) Reboot(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://kinit/v1/reboot", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	return resp.Body.Close()
+}

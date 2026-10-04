@@ -101,6 +101,9 @@ func shutdown(sig syscall.Signal) {
 	log.Printf("received %s, stopping services", sig)
 	stopServices()
 	unix.Sync()
+	// The state partition is ext4 on an installed system; leave it clean.
+	_ = unix.Unmount("/var", unix.MNT_DETACH)
+	unix.Sync()
 	cmd := unix.LINUX_REBOOT_CMD_POWER_OFF
 	if sig == unix.SIGINT {
 		cmd = unix.LINUX_REBOOT_CMD_RESTART

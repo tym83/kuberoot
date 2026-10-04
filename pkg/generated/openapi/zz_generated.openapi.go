@@ -31,70 +31,420 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Kubeconfig":        schema_pkg_apis_node_v1alpha1_Kubeconfig(ref),
-		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.KubeconfigList":    schema_pkg_apis_node_v1alpha1_KubeconfigList(ref),
-		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.NodeService":       schema_pkg_apis_node_v1alpha1_NodeService(ref),
-		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.NodeServiceList":   schema_pkg_apis_node_v1alpha1_NodeServiceList(ref),
-		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.NodeServiceSpec":   schema_pkg_apis_node_v1alpha1_NodeServiceSpec(ref),
-		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.NodeServiceStatus": schema_pkg_apis_node_v1alpha1_NodeServiceStatus(ref),
-		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.OSConfig":          schema_pkg_apis_node_v1alpha1_OSConfig(ref),
-		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.OSConfigList":      schema_pkg_apis_node_v1alpha1_OSConfigList(ref),
-		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.OSConfigSpec":      schema_pkg_apis_node_v1alpha1_OSConfigSpec(ref),
-		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.OSConfigStatus":    schema_pkg_apis_node_v1alpha1_OSConfigStatus(ref),
-		v1.APIGroup{}.OpenAPIModelName():                                     schema_pkg_apis_meta_v1_APIGroup(ref),
-		v1.APIGroupList{}.OpenAPIModelName():                                 schema_pkg_apis_meta_v1_APIGroupList(ref),
-		v1.APIResource{}.OpenAPIModelName():                                  schema_pkg_apis_meta_v1_APIResource(ref),
-		v1.APIResourceList{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_APIResourceList(ref),
-		v1.APIVersions{}.OpenAPIModelName():                                  schema_pkg_apis_meta_v1_APIVersions(ref),
-		v1.ApplyOptions{}.OpenAPIModelName():                                 schema_pkg_apis_meta_v1_ApplyOptions(ref),
-		v1.Condition{}.OpenAPIModelName():                                    schema_pkg_apis_meta_v1_Condition(ref),
-		v1.CreateOptions{}.OpenAPIModelName():                                schema_pkg_apis_meta_v1_CreateOptions(ref),
-		v1.DeleteOptions{}.OpenAPIModelName():                                schema_pkg_apis_meta_v1_DeleteOptions(ref),
-		v1.Duration{}.OpenAPIModelName():                                     schema_pkg_apis_meta_v1_Duration(ref),
-		v1.FieldSelectorRequirement{}.OpenAPIModelName():                     schema_pkg_apis_meta_v1_FieldSelectorRequirement(ref),
-		v1.FieldsV1{}.OpenAPIModelName():                                     schema_pkg_apis_meta_v1_FieldsV1(ref),
-		v1.GetOptions{}.OpenAPIModelName():                                   schema_pkg_apis_meta_v1_GetOptions(ref),
-		v1.GroupKind{}.OpenAPIModelName():                                    schema_pkg_apis_meta_v1_GroupKind(ref),
-		v1.GroupResource{}.OpenAPIModelName():                                schema_pkg_apis_meta_v1_GroupResource(ref),
-		v1.GroupVersion{}.OpenAPIModelName():                                 schema_pkg_apis_meta_v1_GroupVersion(ref),
-		v1.GroupVersionForDiscovery{}.OpenAPIModelName():                     schema_pkg_apis_meta_v1_GroupVersionForDiscovery(ref),
-		v1.GroupVersionKind{}.OpenAPIModelName():                             schema_pkg_apis_meta_v1_GroupVersionKind(ref),
-		v1.GroupVersionResource{}.OpenAPIModelName():                         schema_pkg_apis_meta_v1_GroupVersionResource(ref),
-		v1.InternalEvent{}.OpenAPIModelName():                                schema_pkg_apis_meta_v1_InternalEvent(ref),
-		v1.LabelSelector{}.OpenAPIModelName():                                schema_pkg_apis_meta_v1_LabelSelector(ref),
-		v1.LabelSelectorRequirement{}.OpenAPIModelName():                     schema_pkg_apis_meta_v1_LabelSelectorRequirement(ref),
-		v1.List{}.OpenAPIModelName():                                         schema_pkg_apis_meta_v1_List(ref),
-		v1.ListMeta{}.OpenAPIModelName():                                     schema_pkg_apis_meta_v1_ListMeta(ref),
-		v1.ListOptions{}.OpenAPIModelName():                                  schema_pkg_apis_meta_v1_ListOptions(ref),
-		v1.ManagedFieldsEntry{}.OpenAPIModelName():                           schema_pkg_apis_meta_v1_ManagedFieldsEntry(ref),
-		v1.MicroTime{}.OpenAPIModelName():                                    schema_pkg_apis_meta_v1_MicroTime(ref),
-		v1.ObjectMeta{}.OpenAPIModelName():                                   schema_pkg_apis_meta_v1_ObjectMeta(ref),
-		v1.OwnerReference{}.OpenAPIModelName():                               schema_pkg_apis_meta_v1_OwnerReference(ref),
-		v1.PartialObjectMetadata{}.OpenAPIModelName():                        schema_pkg_apis_meta_v1_PartialObjectMetadata(ref),
-		v1.PartialObjectMetadataList{}.OpenAPIModelName():                    schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref),
-		v1.Patch{}.OpenAPIModelName():                                        schema_pkg_apis_meta_v1_Patch(ref),
-		v1.PatchOptions{}.OpenAPIModelName():                                 schema_pkg_apis_meta_v1_PatchOptions(ref),
-		v1.Preconditions{}.OpenAPIModelName():                                schema_pkg_apis_meta_v1_Preconditions(ref),
-		v1.RootPaths{}.OpenAPIModelName():                                    schema_pkg_apis_meta_v1_RootPaths(ref),
-		v1.ServerAddressByClientCIDR{}.OpenAPIModelName():                    schema_pkg_apis_meta_v1_ServerAddressByClientCIDR(ref),
-		v1.ShardInfo{}.OpenAPIModelName():                                    schema_pkg_apis_meta_v1_ShardInfo(ref),
-		v1.Status{}.OpenAPIModelName():                                       schema_pkg_apis_meta_v1_Status(ref),
-		v1.StatusCause{}.OpenAPIModelName():                                  schema_pkg_apis_meta_v1_StatusCause(ref),
-		v1.StatusDetails{}.OpenAPIModelName():                                schema_pkg_apis_meta_v1_StatusDetails(ref),
-		v1.Table{}.OpenAPIModelName():                                        schema_pkg_apis_meta_v1_Table(ref),
-		v1.TableColumnDefinition{}.OpenAPIModelName():                        schema_pkg_apis_meta_v1_TableColumnDefinition(ref),
-		v1.TableOptions{}.OpenAPIModelName():                                 schema_pkg_apis_meta_v1_TableOptions(ref),
-		v1.TableRow{}.OpenAPIModelName():                                     schema_pkg_apis_meta_v1_TableRow(ref),
-		v1.TableRowCondition{}.OpenAPIModelName():                            schema_pkg_apis_meta_v1_TableRowCondition(ref),
-		v1.Time{}.OpenAPIModelName():                                         schema_pkg_apis_meta_v1_Time(ref),
-		v1.Timestamp{}.OpenAPIModelName():                                    schema_pkg_apis_meta_v1_Timestamp(ref),
-		v1.TypeMeta{}.OpenAPIModelName():                                     schema_pkg_apis_meta_v1_TypeMeta(ref),
-		v1.UpdateOptions{}.OpenAPIModelName():                                schema_pkg_apis_meta_v1_UpdateOptions(ref),
-		v1.WatchEvent{}.OpenAPIModelName():                                   schema_pkg_apis_meta_v1_WatchEvent(ref),
-		runtime.RawExtension{}.OpenAPIModelName():                            schema_k8sio_apimachinery_pkg_runtime_RawExtension(ref),
-		runtime.TypeMeta{}.OpenAPIModelName():                                schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
-		runtime.Unknown{}.OpenAPIModelName():                                 schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
-		version.Info{}.OpenAPIModelName():                                    schema_k8sio_apimachinery_pkg_version_Info(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Disk":               schema_pkg_apis_node_v1alpha1_Disk(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.DiskList":           schema_pkg_apis_node_v1alpha1_DiskList(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.DiskPartition":      schema_pkg_apis_node_v1alpha1_DiskPartition(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.DiskStatus":         schema_pkg_apis_node_v1alpha1_DiskStatus(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Installation":       schema_pkg_apis_node_v1alpha1_Installation(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.InstallationList":   schema_pkg_apis_node_v1alpha1_InstallationList(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.InstallationSpec":   schema_pkg_apis_node_v1alpha1_InstallationSpec(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.InstallationStatus": schema_pkg_apis_node_v1alpha1_InstallationStatus(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Kubeconfig":         schema_pkg_apis_node_v1alpha1_Kubeconfig(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.KubeconfigList":     schema_pkg_apis_node_v1alpha1_KubeconfigList(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.NodeService":        schema_pkg_apis_node_v1alpha1_NodeService(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.NodeServiceList":    schema_pkg_apis_node_v1alpha1_NodeServiceList(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.NodeServiceSpec":    schema_pkg_apis_node_v1alpha1_NodeServiceSpec(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.NodeServiceStatus":  schema_pkg_apis_node_v1alpha1_NodeServiceStatus(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.OSConfig":           schema_pkg_apis_node_v1alpha1_OSConfig(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.OSConfigList":       schema_pkg_apis_node_v1alpha1_OSConfigList(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.OSConfigSpec":       schema_pkg_apis_node_v1alpha1_OSConfigSpec(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.OSConfigStatus":     schema_pkg_apis_node_v1alpha1_OSConfigStatus(ref),
+		v1.APIGroup{}.OpenAPIModelName():                                      schema_pkg_apis_meta_v1_APIGroup(ref),
+		v1.APIGroupList{}.OpenAPIModelName():                                  schema_pkg_apis_meta_v1_APIGroupList(ref),
+		v1.APIResource{}.OpenAPIModelName():                                   schema_pkg_apis_meta_v1_APIResource(ref),
+		v1.APIResourceList{}.OpenAPIModelName():                               schema_pkg_apis_meta_v1_APIResourceList(ref),
+		v1.APIVersions{}.OpenAPIModelName():                                   schema_pkg_apis_meta_v1_APIVersions(ref),
+		v1.ApplyOptions{}.OpenAPIModelName():                                  schema_pkg_apis_meta_v1_ApplyOptions(ref),
+		v1.Condition{}.OpenAPIModelName():                                     schema_pkg_apis_meta_v1_Condition(ref),
+		v1.CreateOptions{}.OpenAPIModelName():                                 schema_pkg_apis_meta_v1_CreateOptions(ref),
+		v1.DeleteOptions{}.OpenAPIModelName():                                 schema_pkg_apis_meta_v1_DeleteOptions(ref),
+		v1.Duration{}.OpenAPIModelName():                                      schema_pkg_apis_meta_v1_Duration(ref),
+		v1.FieldSelectorRequirement{}.OpenAPIModelName():                      schema_pkg_apis_meta_v1_FieldSelectorRequirement(ref),
+		v1.FieldsV1{}.OpenAPIModelName():                                      schema_pkg_apis_meta_v1_FieldsV1(ref),
+		v1.GetOptions{}.OpenAPIModelName():                                    schema_pkg_apis_meta_v1_GetOptions(ref),
+		v1.GroupKind{}.OpenAPIModelName():                                     schema_pkg_apis_meta_v1_GroupKind(ref),
+		v1.GroupResource{}.OpenAPIModelName():                                 schema_pkg_apis_meta_v1_GroupResource(ref),
+		v1.GroupVersion{}.OpenAPIModelName():                                  schema_pkg_apis_meta_v1_GroupVersion(ref),
+		v1.GroupVersionForDiscovery{}.OpenAPIModelName():                      schema_pkg_apis_meta_v1_GroupVersionForDiscovery(ref),
+		v1.GroupVersionKind{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_GroupVersionKind(ref),
+		v1.GroupVersionResource{}.OpenAPIModelName():                          schema_pkg_apis_meta_v1_GroupVersionResource(ref),
+		v1.InternalEvent{}.OpenAPIModelName():                                 schema_pkg_apis_meta_v1_InternalEvent(ref),
+		v1.LabelSelector{}.OpenAPIModelName():                                 schema_pkg_apis_meta_v1_LabelSelector(ref),
+		v1.LabelSelectorRequirement{}.OpenAPIModelName():                      schema_pkg_apis_meta_v1_LabelSelectorRequirement(ref),
+		v1.List{}.OpenAPIModelName():                                          schema_pkg_apis_meta_v1_List(ref),
+		v1.ListMeta{}.OpenAPIModelName():                                      schema_pkg_apis_meta_v1_ListMeta(ref),
+		v1.ListOptions{}.OpenAPIModelName():                                   schema_pkg_apis_meta_v1_ListOptions(ref),
+		v1.ManagedFieldsEntry{}.OpenAPIModelName():                            schema_pkg_apis_meta_v1_ManagedFieldsEntry(ref),
+		v1.MicroTime{}.OpenAPIModelName():                                     schema_pkg_apis_meta_v1_MicroTime(ref),
+		v1.ObjectMeta{}.OpenAPIModelName():                                    schema_pkg_apis_meta_v1_ObjectMeta(ref),
+		v1.OwnerReference{}.OpenAPIModelName():                                schema_pkg_apis_meta_v1_OwnerReference(ref),
+		v1.PartialObjectMetadata{}.OpenAPIModelName():                         schema_pkg_apis_meta_v1_PartialObjectMetadata(ref),
+		v1.PartialObjectMetadataList{}.OpenAPIModelName():                     schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref),
+		v1.Patch{}.OpenAPIModelName():                                         schema_pkg_apis_meta_v1_Patch(ref),
+		v1.PatchOptions{}.OpenAPIModelName():                                  schema_pkg_apis_meta_v1_PatchOptions(ref),
+		v1.Preconditions{}.OpenAPIModelName():                                 schema_pkg_apis_meta_v1_Preconditions(ref),
+		v1.RootPaths{}.OpenAPIModelName():                                     schema_pkg_apis_meta_v1_RootPaths(ref),
+		v1.ServerAddressByClientCIDR{}.OpenAPIModelName():                     schema_pkg_apis_meta_v1_ServerAddressByClientCIDR(ref),
+		v1.ShardInfo{}.OpenAPIModelName():                                     schema_pkg_apis_meta_v1_ShardInfo(ref),
+		v1.Status{}.OpenAPIModelName():                                        schema_pkg_apis_meta_v1_Status(ref),
+		v1.StatusCause{}.OpenAPIModelName():                                   schema_pkg_apis_meta_v1_StatusCause(ref),
+		v1.StatusDetails{}.OpenAPIModelName():                                 schema_pkg_apis_meta_v1_StatusDetails(ref),
+		v1.Table{}.OpenAPIModelName():                                         schema_pkg_apis_meta_v1_Table(ref),
+		v1.TableColumnDefinition{}.OpenAPIModelName():                         schema_pkg_apis_meta_v1_TableColumnDefinition(ref),
+		v1.TableOptions{}.OpenAPIModelName():                                  schema_pkg_apis_meta_v1_TableOptions(ref),
+		v1.TableRow{}.OpenAPIModelName():                                      schema_pkg_apis_meta_v1_TableRow(ref),
+		v1.TableRowCondition{}.OpenAPIModelName():                             schema_pkg_apis_meta_v1_TableRowCondition(ref),
+		v1.Time{}.OpenAPIModelName():                                          schema_pkg_apis_meta_v1_Time(ref),
+		v1.Timestamp{}.OpenAPIModelName():                                     schema_pkg_apis_meta_v1_Timestamp(ref),
+		v1.TypeMeta{}.OpenAPIModelName():                                      schema_pkg_apis_meta_v1_TypeMeta(ref),
+		v1.UpdateOptions{}.OpenAPIModelName():                                 schema_pkg_apis_meta_v1_UpdateOptions(ref),
+		v1.WatchEvent{}.OpenAPIModelName():                                    schema_pkg_apis_meta_v1_WatchEvent(ref),
+		runtime.RawExtension{}.OpenAPIModelName():                             schema_k8sio_apimachinery_pkg_runtime_RawExtension(ref),
+		runtime.TypeMeta{}.OpenAPIModelName():                                 schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
+		runtime.Unknown{}.OpenAPIModelName():                                  schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
+		version.Info{}.OpenAPIModelName():                                     schema_k8sio_apimachinery_pkg_version_Info(ref),
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_Disk(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Disk is a block device of the node.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.DiskStatus"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.DiskStatus", v1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_DiskList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Disk"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Disk", v1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_DiskPartition(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"label": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"sizeBytes": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int64",
+						},
+					},
+				},
+				Required: []string{"name"},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_DiskStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"sizeBytes": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int64",
+						},
+					},
+					"model": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"removable": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"boolean"},
+							Format: "",
+						},
+					},
+					"role": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Role is what kuberoot uses the disk for: BootMedia, System or empty when free.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"partitions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.DiskPartition"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.DiskPartition"},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_Installation(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Installation writes kuberoot from the boot media onto a disk of this node.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.InstallationSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.InstallationStatus"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.InstallationSpec", "github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.InstallationStatus", v1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_InstallationList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Installation"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Installation", v1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_InstallationSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"disk": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Disk is the name of the target disk; everything on it is erased.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"reboot": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Reboot into the installed system when done.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"disk"},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_InstallationStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"phase": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"message": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"progress": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int32",
+						},
+					},
+					"startedAt": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref(v1.Time{}.OpenAPIModelName()),
+						},
+					},
+					"completedAt": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref(v1.Time{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"progress"},
+			},
+		},
+		Dependencies: []string{
+			v1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -467,6 +817,11 @@ func schema_pkg_apis_node_v1alpha1_OSConfigSpec(ref common.ReferenceCallback) co
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
 					"nameservers": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Nameservers replace the DNS servers handed out by DHCP.",
 							Type:        []string{"array"},
@@ -538,6 +893,11 @@ func schema_pkg_apis_node_v1alpha1_OSConfigStatus(ref common.ReferenceCallback) 
 						},
 					},
 					"addresses": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Type: []string{"array"},
 							Items: &spec.SchemaOrArray{

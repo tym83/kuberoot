@@ -32,7 +32,7 @@ fi
 
 exec "${machine[@]}" -smp 4 -m 4096 -nographic -no-reboot \
   -drive "if=none,id=disk,format=raw,file=$DISK" -device virtio-blk-pci,drive=disk,bootindex=1 \
-  "${media[@]}" \
+  ${media[@]+"${media[@]}"} \
   -netdev user,id=n0,hostfwd=tcp::6443-:6443,hostfwd=tcp::50000-:50000 \
   -device virtio-net-pci,netdev=n0 -device virtio-rng-pci \
   "$@"

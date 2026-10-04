@@ -1,0 +1,272 @@
+package installer
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"time"
+
+	diskfs "github.com/diskfs/go-diskfs"
+	"github.com/diskfs/go-diskfs/disk"
+	"github.com/diskfs/go-diskfs/filesystem"
+	"golang.org/x/sys/unix"
+
+	"github.com/tym83/kuberoot/pkg/bootdisk"
+)
+
+// MediaDir is where the running live system finds its boot media.
+const MediaDir = "/run/kuberoot/media"
+
+// Phases an installation goes through, in order.
+const (
+	PhasePending      = "Pending"
+	PhasePartitioning = "Partitioning"
+	PhaseBootloader   = "InstallingBootloader"
+	PhaseWritingRoot  = "WritingRoot"
+	PhaseFormatting   = "FormattingState"
+	PhaseCompleted    = "Completed"
+	PhaseFailed       = "Failed"
+)
+
+// Progress receives phase changes and the overall percentage.
+type Progress func(phase, message string, percent int)
+
+// FromMedia describes the release on the boot media the live system runs from.
+func FromMedia() (bootdisk.Artifacts, error) {
+	a := bootdisk.Artifacts{Dir: filepath.Join(MediaDir, "kuberoot"), Arch: archName(), Version: osVersion()}
+	if _, err := os.Stat(filepath.Join(a.Dir, "rootfs.squashfs")); err != nil {
+		return a, fmt.Errorf("not running from kuberoot boot media")
+	}
+	a.ConsoleArg = consoleArgs()
+	return a, nil
+}
+
+// Install erases the disk and writes slot A, the bootloader and an empty state partition.
+func Install(ctx context.Context, diskName string, a bootdisk.Artifacts, progress Progress) error {
+	target, err := checkTarget(diskName)
+	if err != nil {
+		return err
+	}
+	progress(PhasePartitioning, "writing partition table to "+target.Name, 5)
+	if err := partitionAndBoot(ctx, target, a, progress); err != nil {
+		return err
+	}
+
+	progress(PhaseWritingRoot, "writing the root image to slot A", 30)
+	if err := WriteRoot(ctx, a, PartitionOn(target.Name, bootdisk.RootLabel("a")), func(done, total int64) {
+		progress(PhaseWritingRoot, fmt.Sprintf("writing the root image to slot A: %d of %d MiB", done>>20, total>>20), 30+int(55*done/max(total, 1)))
+	}); err != nil {
+		return err
+	}
+
+	progress(PhaseFormatting, "creating the state partition", 90)
+	state := PartitionOn(target.Name, bootdisk.StateLabel)
+	if out, err := exec.CommandContext(ctx, "mkfs.ext4", "-q", "-F", "-L", bootdisk.StateLabel, state).CombinedOutput(); err != nil {
+		return fmt.Errorf("mkfs.ext4 %s: %v: %s", state, err, out)
+	}
+	progress(PhaseFormatting, "carrying the node identity over", 95)
+	return carryIdentity(state)
+}
+
+// carryIdentity copies the node's CAs, keys and machine ID onto the new state
+// partition: the installed system is the same node the admin already talks to,
+// and credentials issued by the live system keep working.
+func carryIdentity(stateDev string) error {
+	const mnt = "/run/kuberoot/target-state"
+	if err := os.MkdirAll(mnt, 0o755); err != nil {
+		return err
+	}
+	if err := unix.Mount(stateDev, mnt, "ext4", 0, ""); err != nil {
+		return fmt.Errorf("mount new state: %w", err)
+	}
+	defer unix.Unmount(mnt, 0)
+	for _, rel := range []string{"lib/kuberoot/pki", "lib/kuberoot/machine-id"} {
+		if err := copyTree(filepath.Join("/var", rel), filepath.Join(mnt, rel)); err != nil {
+			return fmt.Errorf("copy %s: %w", rel, err)
+		}
+	}
+	unix.Sync()
+	return nil
+}
+
+func copyTree(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, strings.TrimPrefix(path, src))
+		if info.IsDir() {
+			return os.MkdirAll(target, info.Mode().Perm())
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(target, raw, info.Mode().Perm())
+	})
+}
+
+// partitionAndBoot writes the partition table and the EFI partition. The disk is
+// held open exclusively only for this step: mkfs refuses partitions of a busy disk.
+func partitionAndBoot(ctx context.Context, target Disk, a bootdisk.Artifacts, progress Progress) error {
+	d, err := diskfs.Open("/dev/"+target.Name, diskfs.WithOpenMode(diskfs.ReadWriteExclusive))
+	if err != nil {
+		return fmt.Errorf("open %s: %w", target.Name, err)
+	}
+	defer d.Close()
+	table, err := bootdisk.InstalledTable(target.SizeBytes)
+	if err != nil {
+		return err
+	}
+	if err := d.Partition(table); err != nil {
+		return fmt.Errorf("partition: %w", err)
+	}
+	_ = d.ReReadPartitionTable()
+	if err := waitForLabels(ctx, target.Name, bootdisk.EFILabel, bootdisk.RootLabel("a"), bootdisk.StateLabel); err != nil {
+		return err
+	}
+
+	progress(PhaseBootloader, "installing systemd-boot and the slot A kernel", 15)
+	esp, err := d.CreateFilesystem(disk.FilesystemSpec{Partition: 1, FSType: filesystem.TypeFat32, VolumeLabel: "KUBEROOT-EFI"})
+	if err != nil {
+		return fmt.Errorf("format EFI partition: %w", err)
+	}
+	if err := WriteSlotBoot(esp, a, "a", "1"); err != nil {
+		return err
+	}
+	if err := bootdisk.CopyFile(esp, a.RemovableBootPath(), filepath.Join(MediaDir, a.RemovableBootPath())); err != nil {
+		return err
+	}
+	return bootdisk.WriteFile(esp, "/loader/loader.conf", strings.NewReader(bootdisk.LoaderConf))
+}
+
+// WriteSlotBoot puts a slot's kernel, initrd and loader entry on the EFI partition.
+func WriteSlotBoot(esp filesystem.FileSystem, a bootdisk.Artifacts, slot, version string) error {
+	entry := bootdisk.SlotEntry(a, slot, version)
+	if err := bootdisk.CopyFile(esp, entry.Kernel, filepath.Join(a.Dir, "vmlinuz.efi")); err != nil {
+		return err
+	}
+	if err := bootdisk.CopyFile(esp, entry.Initrd, filepath.Join(a.Dir, "initrd.cpio")); err != nil {
+		return err
+	}
+	return bootdisk.WriteFile(esp, "/loader/entries/"+entry.ID+".conf", strings.NewReader(entry.String()))
+}
+
+// WriteRoot copies the squashfs image onto a root partition device.
+func WriteRoot(ctx context.Context, a bootdisk.Artifacts, device string, report func(done, total int64)) error {
+	src, err := os.Open(filepath.Join(a.Dir, "rootfs.squashfs"))
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	st, err := src.Stat()
+	if err != nil {
+		return err
+	}
+	dst, err := os.OpenFile(device, os.O_WRONLY, 0)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+	buf := make([]byte, 4<<20)
+	var done int64
+	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		n, rerr := src.Read(buf)
+		if n > 0 {
+			if _, err := dst.Write(buf[:n]); err != nil {
+				return err
+			}
+			done += int64(n)
+			report(done, st.Size())
+		}
+		if rerr == io.EOF {
+			break
+		}
+		if rerr != nil {
+			return rerr
+		}
+	}
+	return dst.Sync()
+}
+
+func checkTarget(name string) (Disk, error) {
+	for _, d := range Disks() {
+		if d.Name != name {
+			continue
+		}
+		if d.Role == RoleBootMedia {
+			return d, fmt.Errorf("%s is the boot media", name)
+		}
+		return d, nil
+	}
+	return Disk{}, fmt.Errorf("no disk named %q", name)
+}
+
+func waitForLabels(ctx context.Context, diskName string, labels ...string) error {
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		missing := ""
+		for _, l := range labels {
+			if PartitionOn(diskName, l) == "" {
+				missing = l
+			}
+		}
+		if missing == "" {
+			return nil
+		}
+		if time.Now().After(deadline) || ctx.Err() != nil {
+			return fmt.Errorf("partition %s did not appear", missing)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+// PartitionOn finds the device node of the partition with the given GPT name on
+// one disk; with an empty disk name, on any disk.
+func PartitionOn(diskName, label string) string {
+	for _, d := range Disks() {
+		if diskName != "" && d.Name != diskName {
+			continue
+		}
+		for _, p := range d.Partitions {
+			if p.Label == label {
+				return "/dev/" + p.Name
+			}
+		}
+	}
+	return ""
+}
+
+// consoleArgs carries the console and kuberoot.* settings the media booted with,
+// except the live-only ones, over to the installed system.
+func consoleArgs() string {
+	var args []string
+	for _, f := range strings.Fields(readFile("/proc/cmdline")) {
+		if strings.HasPrefix(f, "kuberoot.root=") || f == "kuberoot.mode=install" {
+			continue
+		}
+		if strings.HasPrefix(f, "console=") || strings.HasPrefix(f, "kuberoot.") {
+			args = append(args, f)
+		}
+	}
+	return strings.Join(args, " ")
+}
+
+func osVersion() string {
+	for _, line := range strings.Split(readFile("/etc/os-release"), "\n") {
+		if v, ok := strings.CutPrefix(line, "VERSION_ID="); ok {
+			return strings.Trim(v, `"`)
+		}
+	}
+	return "unknown"
+}

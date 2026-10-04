@@ -92,6 +92,8 @@ func Run(ctx context.Context, o Options) error {
 		"nodeservices":     newServiceStorage(kinit),
 		"nodeservices/log": &logStorage{kinit: kinit},
 		"kubeconfigs":      &kubeconfigStorage{files: o.Kubeconfig},
+		"disks":            diskStorage{},
+		"installations":    &installationStorage{kinit: kinit},
 	}
 	if err := server.InstallAPIGroup(&group); err != nil {
 		return err
