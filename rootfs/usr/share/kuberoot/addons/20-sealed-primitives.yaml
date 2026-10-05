@@ -1,7 +1,16 @@
-# In sealed namespaces nobody, cluster admins included, changes the primitives
-# by hand: they come from intents. The exceptions are the translator, the
-# cluster's own components, and the users of live Overrides, which the
-# translator lists in the namespace's kuberoot-overrides ConfigMap (sealed too).
+# In sealed namespaces nobody, cluster admins included, changes anything by hand
+# but intents: the rest comes from intents. The exceptions are the translator,
+# the cluster's own components, and the users of live Overrides, which the
+# translator lists in kube-system/kuberoot-overrides, one key per namespace.
+#
+# Cluster admins can still delete these policies; that is a deliberate, audited
+# act, not a hand edit that slips by.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kuberoot-overrides
+  namespace: kube-system
+---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
@@ -13,29 +22,41 @@ spec:
     kind: ConfigMap
   matchConstraints:
     resourceRules:
-    - apiGroups: ["apps"]
-      apiVersions: ["v1"]
-      operations: ["CREATE", "UPDATE", "DELETE"]
-      resources: ["deployments", "deployments/scale", "statefulsets", "statefulsets/scale", "daemonsets"]
-    - apiGroups: [""]
-      apiVersions: ["v1"]
-      operations: ["CREATE", "UPDATE", "DELETE"]
-      resources: ["services", "configmaps", "secrets"]
-  variables:
-  - name: user
-    expression: request.userInfo.username
-  - name: trusted
+    - apiGroups: ["*"]
+      apiVersions: ["*"]
+      operations: ["CREATE", "UPDATE", "DELETE", "CONNECT"]
+      resources: ["*/*"]
+      # What lives inside the namespace; the namespace object itself and
+      # cluster-wide resources are not sealed by this policy.
+      scope: Namespaced
+    excludeResourceRules:
+    # What people are meant to use in a sealed namespace.
+    - apiGroups: ["intents.kuberoot.dev"]
+      apiVersions: ["*"]
+      operations: ["*"]
+      resources: ["apps", "overrides"]
+    # Not workload: events and permission checks.
+    - apiGroups: ["", "events.k8s.io"]
+      apiVersions: ["*"]
+      operations: ["*"]
+      resources: ["events"]
+    - apiGroups: ["authorization.k8s.io"]
+      apiVersions: ["*"]
+      operations: ["*"]
+      resources: ["*"]
+  # Trusted identities never reach the parameter lookup below, so the
+  # translator can create the ConfigMap the seal needs.
+  matchConditions:
+  - name: not-trusted
     expression: >-
-      variables.user == 'kuberoot:intents' ||
-      variables.user.startsWith('system:serviceaccount:kube-system:') ||
-      variables.user.startsWith('system:node:') ||
-      variables.user in ['system:kube-controller-manager', 'system:kube-scheduler', 'system:apiserver']
-  - name: overridden
-    expression: >-
-      params != null && has(params.data) && 'users' in params.data &&
-      variables.user in params.data.users.split('\n')
+      !(request.userInfo.username == 'kuberoot:intents' ||
+        request.userInfo.username.startsWith('system:serviceaccount:kube-system:') ||
+        request.userInfo.username.startsWith('system:node:') ||
+        request.userInfo.username in ['system:kube-controller-manager', 'system:kube-scheduler', 'system:apiserver'])
   validations:
-  - expression: variables.trusted || variables.overridden
+  - expression: >-
+      has(params.data) && request.namespace in params.data &&
+      request.userInfo.username in params.data[request.namespace].split('\n')
     messageExpression: >-
       'namespace ' + request.namespace + ' is sealed: ' + request.resource.resource +
       ' come from intents (App); for an emergency, create an Override'
@@ -48,12 +69,51 @@ metadata:
 spec:
   policyName: kuberoot-sealed-primitives
   validationActions: [Deny]
-  # The ConfigMap of the namespace being changed. The translator creates it as
-  # soon as a namespace is sealed; until then the seal is not in force.
+  # Shipped empty with the add-ons, so it always exists; without it everyone is
+  # refused rather than let through.
   paramRef:
     name: kuberoot-overrides
-    parameterNotFoundAction: Allow
+    namespace: kube-system
+    parameterNotFoundAction: Deny
   matchResources:
     namespaceSelector:
       matchLabels:
         kuberoot.dev/sealed: "true"
+---
+# A seal is not lifted by editing a label: only trusted identities may remove
+# kuberoot.dev/sealed or delete a sealed namespace.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: kuberoot-seal-label
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups: [""]
+      apiVersions: ["v1"]
+      operations: ["UPDATE", "DELETE"]
+      resources: ["namespaces"]
+  matchConditions:
+  - name: was-sealed
+    expression: >-
+      oldObject != null && has(oldObject.metadata.labels) &&
+      oldObject.metadata.labels[?'kuberoot.dev/sealed'].orValue('') == 'true'
+  - name: not-trusted
+    expression: >-
+      !(request.userInfo.username == 'kuberoot:intents' ||
+        request.userInfo.username.startsWith('system:serviceaccount:kube-system:'))
+  validations:
+  - expression: >-
+      request.operation == 'UPDATE' && has(object.metadata.labels) &&
+      object.metadata.labels[?'kuberoot.dev/sealed'].orValue('') == 'true'
+    message: a sealed namespace keeps its seal; delete the kuberoot-seal-label policy to unseal deliberately
+    reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: kuberoot-seal-label
+spec:
+  policyName: kuberoot-seal-label
+  validationActions: [Deny]

@@ -59,9 +59,10 @@ func (t *Translator) Run(ctx context.Context, interval time.Duration) {
 }
 
 func (t *Translator) Reconcile(ctx context.Context) error {
+	// Overrides failing must not stop the Apps from being kept in shape.
 	paused, err := t.reconcileOverrides(ctx)
 	if err != nil {
-		return err
+		klog.Errorf("overrides: %v", err)
 	}
 	apps, err := t.Dynamic.Resource(appsGVR).Namespace("").List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -94,6 +95,9 @@ func (t *Translator) lower(ctx context.Context, app *unstructured.Unstructured) 
 	env, _, _ := unstructured.NestedStringMap(app.Object, "spec", "env")
 
 	ns, name := app.GetNamespace(), app.GetName()
+	if err := t.ownsOrFree(ctx, app); err != nil {
+		return err
+	}
 	labels := map[string]string{"app.kubernetes.io/name": name, "app.kubernetes.io/managed-by": FieldManager}
 	owner := metaapply.OwnerReference().WithAPIVersion("intents.kuberoot.dev/v1alpha1").WithKind("App").
 		WithName(name).WithUID(app.GetUID()).WithController(true).WithBlockOwnerDeletion(true)
@@ -137,6 +141,27 @@ func (t *Translator) lower(ctx context.Context, app *unstructured.Unstructured) 
 	return nil
 }
 
+// ownsOrFree refuses to lower an App onto a Deployment or Service of the same
+// name that something else made: server-side apply with force would take it over.
+func (t *Translator) ownsOrFree(ctx context.Context, app *unstructured.Unstructured) error {
+	ns, name := app.GetNamespace(), app.GetName()
+	owned := func(refs []metav1.OwnerReference) bool {
+		for _, r := range refs {
+			if r.Controller != nil && *r.Controller && r.UID == app.GetUID() {
+				return true
+			}
+		}
+		return false
+	}
+	if d, err := t.Client.AppsV1().Deployments(ns).Get(ctx, name, metav1.GetOptions{}); err == nil && !owned(d.OwnerReferences) {
+		return fmt.Errorf("deployment %s exists and does not belong to this App", name)
+	}
+	if s, err := t.Client.CoreV1().Services(ns).Get(ctx, name, metav1.GetOptions{}); err == nil && !owned(s.OwnerReferences) {
+		return fmt.Errorf("service %s exists and does not belong to this App", name)
+	}
+	return nil
+}
+
 func state(d *appsv1.Deployment) string {
 	if d.Spec.Replicas != nil && d.Status.ReadyReplicas >= *d.Spec.Replicas {
 		return "Ready"
@@ -161,9 +186,12 @@ func (t *Translator) setAppStatus(ctx context.Context, app *unstructured.Unstruc
 // SealLabel marks the namespaces whose primitives come from intents only.
 const SealLabel = "kuberoot.dev/sealed"
 
-// OverridesConfigMap lists, per sealed namespace, the users of live Overrides;
-// the sealing admission policy reads it as its parameter.
-const OverridesConfigMap = "kuberoot-overrides"
+// OverridesConfigMap lists, per namespace, the users of live Overrides; the
+// sealing admission policy reads it as its parameter.
+const (
+	OverridesConfigMap = "kuberoot-overrides"
+	OverridesNamespace = "kube-system"
+)
 
 // reconcileOverrides publishes who holds a live Override in every sealed
 // namespace and returns the apps on pause, keyed namespace/name, with who holds them.
@@ -196,22 +224,24 @@ func (t *Translator) reconcileOverrides(ctx context.Context) (map[string]string,
 		}
 		t.setOverrideStatus(ctx, o, st, expires)
 	}
-	sealed, err := t.Client.CoreV1().Namespaces().List(ctx, metav1.ListOptions{LabelSelector: SealLabel + "=true"})
-	if err != nil {
-		return nil, err
-	}
-	for _, ns := range sealed.Items {
-		names := make([]string, 0, len(users[ns.Name]))
-		for u := range users[ns.Name] {
+	// One key per namespace with live Overrides; the add-ons ship the
+	// ConfigMap, the translator owns its data.
+	data := map[string]string{}
+	for ns, set := range users {
+		names := make([]string, 0, len(set))
+		for u := range set {
 			names = append(names, u)
 		}
 		sort.Strings(names)
-		cm := coreapply.ConfigMap(OverridesConfigMap, ns.Name).
-			WithLabels(map[string]string{"app.kubernetes.io/managed-by": FieldManager}).
-			WithData(map[string]string{"users": strings.Join(names, "\n")})
-		if _, err := t.Client.CoreV1().ConfigMaps(ns.Name).Apply(ctx, cm, metav1.ApplyOptions{FieldManager: FieldManager, Force: true}); err != nil {
-			klog.Errorf("overrides of %s: %v", ns.Name, err)
-		}
+		data[ns] = strings.Join(names, "\n")
+	}
+	cm, err := t.Client.CoreV1().ConfigMaps(OverridesNamespace).Get(ctx, OverridesConfigMap, metav1.GetOptions{})
+	if err != nil {
+		return paused, err
+	}
+	cm.Data = data // whole, so namespaces whose Overrides ended drop out
+	if _, err := t.Client.CoreV1().ConfigMaps(OverridesNamespace).Update(ctx, cm, metav1.UpdateOptions{FieldManager: FieldManager}); err != nil {
+		return paused, err
 	}
 	return paused, nil
 }

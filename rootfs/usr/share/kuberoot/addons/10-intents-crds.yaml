@@ -101,6 +101,11 @@ spec:
               user:
                 type: string
                 description: Who may act on the app's primitives directly.
+                minLength: 1
+                maxLength: 253
+                x-kubernetes-validations:
+                - rule: '!self.matches("\\s")'
+                  message: a user name has no whitespace
               app:
                 type: string
                 description: The App whose translation is paused meanwhile.
