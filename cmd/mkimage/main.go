@@ -20,12 +20,13 @@ func main() {
 	var a bootdisk.Artifacts
 	var out string
 	var dev bool
-	var extra string
+	var extra, trustDir string
 	flag.StringVar(&a.Dir, "artifacts", "", "directory with vmlinuz.efi, initrd.cpio, rootfs.squashfs, systemd-boot.efi")
 	flag.StringVar(&a.Arch, "arch", "arm64", "target architecture")
 	flag.StringVar(&a.Version, "version", "0.1.0-dev", "release version")
 	flag.StringVar(&out, "out", "", "image file to create")
 	flag.BoolVar(&dev, "dev", false, "development media: print node credentials on the console")
+	flag.StringVar(&trustDir, "trust", "", "directory with the CAs that give access to nodes installed from this media; created if missing")
 	flag.StringVar(&extra, "args", "", "extra kernel arguments, e.g. kuberoot.ip=eth1:192.168.100.11/24")
 	flag.Parse()
 	if a.Dir == "" || out == "" {
@@ -38,7 +39,14 @@ func main() {
 	if extra != "" {
 		a.ConsoleArg += " " + extra
 	}
-	if err := build(a, out); err != nil {
+	var t *trust
+	if trustDir != "" {
+		t = &trust{dir: trustDir}
+		if err := t.ensure(); err != nil {
+			log.Fatalf("trust: %v", err)
+		}
+	}
+	if err := build(a, out, t); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -50,7 +58,7 @@ func consoleFor(arch string) string {
 	return "console=tty0 console=ttyAMA0"
 }
 
-func build(a bootdisk.Artifacts, out string) error {
+func build(a bootdisk.Artifacts, out string, t *trust) error {
 	files := map[string]string{
 		a.RemovableBootPath():       a.Dir + "/systemd-boot.efi",
 		"/kuberoot/vmlinuz.efi":     a.Dir + "/vmlinuz.efi",
@@ -100,6 +108,12 @@ func build(a bootdisk.Artifacts, out string) error {
 	}
 	if err := bootdisk.WriteFile(fs, "/loader/loader.conf", strings.NewReader(bootdisk.LoaderConf)); err != nil {
 		return err
+	}
+	if t != nil {
+		if err := t.install(fs); err != nil {
+			return err
+		}
+		fmt.Printf("admin access: %s\n", t.path("admin.kubeconfig"))
 	}
 	fmt.Printf("media: %s (%d MiB)\n", out, (espSize+2*bootdisk.MiB)/bootdisk.MiB)
 	return nil

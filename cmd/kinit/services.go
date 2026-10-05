@@ -71,7 +71,7 @@ func nodeServices(node nodeInfo, cn clusterNet, cfg bootConfig) []service {
 			"--advertise-address=" + ip,
 			"--tls-cert-file=" + pkiPath("node-api.crt"),
 			"--tls-private-key-file=" + pkiPath("node-api.key"),
-			"--client-ca-file=" + pkiPath("node-ca.crt"),
+			"--client-ca-file=" + pkiPath(nodeClientCA),
 			"--kubeconfigs=admin=" + kubeDir + "/admin.kubeconfig",
 			"--requestheader-client-ca-file=" + pkiPath("front-proxy-ca.crt"),
 			"--cluster-tls-cert-file=" + pkiPath("node-api-cluster.crt"),

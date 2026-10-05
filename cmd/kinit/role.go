@@ -123,7 +123,7 @@ func writeWorkerConfig(node nodeInfo, m nodev1.MembershipSpec, cn clusterNet) er
 		// kube-proxy acts with the node's own identity, which the cluster binds to the proxier role.
 		filepath.Join(kubeDir, "kube-proxy.kubeconfig"): fmt.Sprintf(fileKubeconfig, m.Server, ca, kubeletPKI, kubeletPKI),
 	}
-	nodeAdmin, err := kubeconfig(nodeAPIServer, "node-ca.crt", node.name, "node-admin")
+	nodeAdmin, err := kubeconfig(nodeAPIServer, nodeServingCA, node.name, "node-admin")
 	if err != nil {
 		return err
 	}
@@ -152,7 +152,7 @@ func workerServices(node nodeInfo, cn clusterNet) []service {
 			"--advertise-address=" + ip,
 			"--tls-cert-file=" + pkiPath("node-api.crt"),
 			"--tls-private-key-file=" + pkiPath("node-api.key"),
-			"--client-ca-file=" + pkiPath("node-ca.crt"),
+			"--client-ca-file=" + pkiPath(nodeClientCA),
 			"--cluster-tls-cert-file=" + filepath.Join(clusterDir, "node-api.crt"),
 			"--cluster-tls-private-key-file=" + filepath.Join(clusterDir, "node-api.key"),
 			"--proxy-trust-ca-file=" + filepath.Join(clusterDir, "ca.crt"),

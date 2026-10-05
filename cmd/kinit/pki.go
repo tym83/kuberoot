@@ -120,21 +120,84 @@ func createAggregationPKI(clusterCA *authority) error {
 // createNodePKI issues the node's own trust root, separate from the cluster's:
 // the node API exists before a cluster does and outlives it.
 func createNodePKI(node nodeInfo) error {
-	ca, err := loadOrCreateAuthority("node-ca", "kuberoot-node-ca "+node.name)
+	// The local CA never leaves the node; it vouches for the node's own admin
+	// identity, which the console installer and development builds use.
+	local, err := loadOrCreateAuthority("node-ca", "kuberoot-node-ca "+node.name)
 	if err != nil {
 		return err
 	}
-	for _, s := range []certSpec{
-		{file: "node-api", commonName: node.name, usages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-			dnsNames: []string{node.name, "localhost"}, ips: []net.IP{node.ip, net.ParseIP("127.0.0.1")}},
-		{file: "node-admin", commonName: "kuberoot-node-admin", orgs: []string{"kuberoot:node-admins"},
-			usages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}},
+	if err := importMediaTrust(); err != nil {
+		return fmt.Errorf("trust from boot media: %w", err)
+	}
+	// Boot media made with mkimage --trust brings a serving CA shared by every
+	// node installed from it, and the admin CA its maker holds the key of.
+	serving, servingCert := local, pkiPath("node-ca.crt")
+	if _, err := os.Stat(pkiPath(mediaServingCA + ".crt")); err == nil {
+		if serving, err = loadOrCreateAuthority(mediaServingCA, ""); err != nil {
+			return err
+		}
+		servingCert = pkiPath(mediaServingCA + ".crt")
+	}
+	if err := serving.issue(certSpec{file: "node-api", commonName: node.name, usages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		dnsNames: []string{node.name, "localhost", nodeAPIServerName}, ips: []net.IP{node.ip, net.ParseIP("127.0.0.1")}}); err != nil {
+		return fmt.Errorf("issue node-api: %w", err)
+	}
+	if err := local.issue(certSpec{file: "node-admin", commonName: "kuberoot-node-admin", orgs: []string{"kuberoot:node-admins"},
+		usages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}}); err != nil {
+		return fmt.Errorf("issue node-admin: %w", err)
+	}
+	if err := copyPEM(servingCert, pkiPath(nodeServingCA)); err != nil {
+		return err
+	}
+	clients, err := os.ReadFile(pkiPath("node-ca.crt"))
+	if err != nil {
+		return err
+	}
+	if admin, err := os.ReadFile(pkiPath(mediaAdminCA + ".crt")); err == nil {
+		clients = append(clients, admin...)
+	}
+	return atomicfile.WriteFile(pkiPath(nodeClientCA), clients, 0o600)
+}
+
+const (
+	mediaTrustDir  = "/run/kuberoot/media/kuberoot/trust"
+	mediaServingCA = "media-serving-ca"
+	mediaAdminCA   = "media-admin-ca"
+	nodeServingCA  = "node-serving-ca.crt" // what clients verify the node API with
+	nodeClientCA   = "node-client-ca.crt"  // whose client certificates the node API accepts
+	// nodeAPIServerName is in every node API certificate, so one kubeconfig
+	// reaches any node installed from the same media, whatever its address.
+	nodeAPIServerName = "kuberoot-node"
+)
+
+// importMediaTrust copies the CAs of boot media into the node's PKI; the
+// installer carries them on to the installed system with the rest of it.
+func importMediaTrust() error {
+	for src, dst := range map[string]string{
+		"serving-ca.crt": mediaServingCA + ".crt",
+		"serving-ca.key": mediaServingCA + ".key",
+		"admin-ca.crt":   mediaAdminCA + ".crt",
 	} {
-		if err := ca.issue(s); err != nil {
-			return fmt.Errorf("issue %s: %w", s.file, err)
+		raw, err := os.ReadFile(filepath.Join(mediaTrustDir, src))
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if err := atomicfile.WriteFile(pkiPath(dst), raw, 0o600); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func copyPEM(src, dst string) error {
+	raw, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return atomicfile.WriteFile(dst, raw, 0o600)
 }
 
 // loadOrCreateAuthority reuses <file>.crt/.key when present, so credentials

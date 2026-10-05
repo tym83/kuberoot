@@ -42,7 +42,7 @@ func writeNodeConfig(node nodeInfo, cn clusterNet) error {
 		}
 		files[filepath.Join(kubeDir, user+".kubeconfig")] = kc
 	}
-	nodeAdmin, err := kubeconfig(nodeAPIServer, "node-ca.crt", node.name, "node-admin")
+	nodeAdmin, err := kubeconfig(nodeAPIServer, nodeServingCA, node.name, "node-admin")
 	if err != nil {
 		return err
 	}

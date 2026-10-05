@@ -83,7 +83,7 @@ func nodeClient() (*http.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	ca, err := os.ReadFile(pkiDir + "node-ca.crt")
+	ca, err := os.ReadFile(pkiDir + "node-serving-ca.crt")
 	if err != nil {
 		return nil, err
 	}
