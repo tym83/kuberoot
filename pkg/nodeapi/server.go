@@ -150,7 +150,13 @@ func Run(ctx context.Context, o Options) error {
 			return fmt.Errorf("join tickets: %w", err)
 		}
 		resources["jointickets"] = tickets
-		go approveKubeletServing(ctx, admin)
+		var reserved []*net.IPNet
+		for _, c := range []string{o.PodCIDR, o.ServiceCIDR} {
+			if _, r, err := net.ParseCIDR(c); err == nil {
+				reserved = append(reserved, r)
+			}
+		}
+		go approveKubeletServing(ctx, admin, reserved)
 	}
 	for name, st := range storages {
 		resources[name] = st

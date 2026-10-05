@@ -21,7 +21,15 @@ for bin in "$OUT"/*.test; do
   [ -e "$bin" ] || continue
   # Run in the package directory, as go test does, so tests find their files.
   dir=$(basename "$bin" .test | tr _ /)
-  if docker run --rm -v "$OUT:/t:ro" -v "$PWD:/src:ro" -w "/src/$dir" alpine:3.22 "/t/$(basename "$bin")" -test.v > "$bin.log" 2>&1; then
+  # colima occasionally leaves a finished container "running"; cap each run.
+  name="kuberoot-test-$$-$(basename "$bin" .test)"
+  docker run --rm --name "$name" -v "$OUT:/t:ro" -v "$PWD:/src:ro" -w "/src/$dir" alpine:3.22 \
+    "/t/$(basename "$bin")" -test.v > "$bin.log" 2>&1 &
+  run=$!
+  for _ in $(seq 1 300); do kill -0 $run 2>/dev/null || break; sleep 1; done
+  if kill -0 $run 2>/dev/null; then docker kill "$name" >/dev/null 2>&1; fi
+  wait $run 2>/dev/null
+  if grep -q '^PASS$' "$bin.log" && ! grep -q '^--- FAIL' "$bin.log"; then
     echo "ok   $(basename "$bin" .test)"
   else
     echo "FAIL $(basename "$bin" .test)"; cat "$bin.log"; status=1

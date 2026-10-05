@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"net"
 	"slices"
 	"strings"
 	"time"
@@ -19,7 +20,7 @@ import (
 // approveKubeletServing approves kubelet serving certificate requests that
 // match the node they come from, so the API server can verify kubelets.
 // Kubernetes leaves this approval to the cluster operator; kuberoot does it here.
-func approveKubeletServing(ctx context.Context, client kubernetes.Interface) {
+func approveKubeletServing(ctx context.Context, client kubernetes.Interface, reserved []*net.IPNet) {
 	for ctx.Err() == nil {
 		csrs, err := client.CertificatesV1().CertificateSigningRequests().List(ctx, metav1.ListOptions{})
 		if err == nil {
@@ -28,7 +29,7 @@ func approveKubeletServing(ctx context.Context, client kubernetes.Interface) {
 				if csr.Spec.SignerName != certificatesv1.KubeletServingSignerName || decided(csr) {
 					continue
 				}
-				if err := checkServingRequest(ctx, client, csr); err != nil {
+				if err := checkServingRequest(ctx, client, csr, reserved); err != nil {
 					klog.Infof("kubelet serving CSR %s not approved: %v", csr.Name, err)
 					continue
 				}
@@ -58,8 +59,11 @@ func decided(csr *certificatesv1.CertificateSigningRequest) bool {
 }
 
 // checkServingRequest accepts a request only from system:node:<name> for a
-// certificate naming that node, with addresses the node reports.
-func checkServingRequest(ctx context.Context, client kubernetes.Interface, csr *certificatesv1.CertificateSigningRequest) error {
+// certificate naming that node and nothing else: its plain name, and the
+// internal addresses it reports outside the cluster's own ranges. The cluster
+// CA signs it, so a certificate for a service name or a service address would
+// let a node pose as that service.
+func checkServingRequest(ctx context.Context, client kubernetes.Interface, csr *certificatesv1.CertificateSigningRequest, reserved []*net.IPNet) error {
 	nodeName, ok := strings.CutPrefix(csr.Spec.Username, "system:node:")
 	if !ok || !slices.Contains(csr.Spec.Groups, "system:nodes") {
 		return fmt.Errorf("requester %s is not a node", csr.Spec.Username)
@@ -79,19 +83,29 @@ func checkServingRequest(ctx context.Context, client kubernetes.Interface, csr *
 	if err != nil {
 		return err
 	}
-	known := map[string]bool{}
+	internal := map[string]bool{}
 	for _, a := range node.Status.Addresses {
-		known[a.Address] = true
+		if a.Type == corev1.NodeInternalIP {
+			internal[a.Address] = true
+		}
 	}
 	for _, ip := range req.IPAddresses {
-		if !known[ip.String()] {
-			return fmt.Errorf("address %s is not one of the node's", ip)
+		if !internal[ip.String()] {
+			return fmt.Errorf("address %s is not an internal address of the node", ip)
+		}
+		for _, r := range reserved {
+			if r.Contains(ip) {
+				return fmt.Errorf("address %s is in the cluster range %s", ip, r)
+			}
 		}
 	}
 	for _, dns := range req.DNSNames {
-		if !known[dns] && dns != nodeName {
-			return fmt.Errorf("name %s is not the node's", dns)
+		if dns != nodeName || strings.Contains(dns, ".") {
+			return fmt.Errorf("name %s is not the node's plain name", dns)
 		}
+	}
+	if len(req.EmailAddresses) > 0 || len(req.URIs) > 0 {
+		return fmt.Errorf("only names and addresses may be requested")
 	}
 	for _, u := range csr.Spec.Usages {
 		switch u {
