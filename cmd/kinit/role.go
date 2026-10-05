@@ -22,7 +22,11 @@ const clusterDir = "/var/lib/kuberoot/cluster"
 func configure(node nodeInfo, cfg bootConfig) ([]service, bool, error) {
 	m, err := membership.Load()
 	if err != nil {
-		return nil, false, fmt.Errorf("membership: %w", err)
+		// A damaged membership must not keep the node down: set it aside and run
+		// standalone, reachable through its node API for repair.
+		log.Printf("membership unreadable, running standalone: %v", err)
+		quarantineMembership()
+		m = nil
 	}
 	if m == nil {
 		cn, err := parseClusterNet(cfg.podCIDR, cfg.serviceCIDR)
@@ -47,8 +51,18 @@ func configure(node nodeInfo, cfg bootConfig) ([]service, bool, error) {
 	return workerServices(node, cn), false, nil
 }
 
+// quarantineMembership moves the membership aside, kept for inspection.
+func quarantineMembership() {
+	_ = os.Rename(membership.Path, membership.Path+".broken")
+}
+
 // reconfigure switches roles in place: the node joined or left a cluster.
 func reconfigure(node nodeInfo, cfg bootConfig) {
+	lifecycle.Lock()
+	defer lifecycle.Unlock()
+	if shuttingDown {
+		return
+	}
 	log.Printf("reconfiguring")
 	stopServices()
 	// The pod bridge keeps the old role's gateway address; the CNI plugin
@@ -58,12 +72,18 @@ func reconfigure(node nodeInfo, cfg bootConfig) {
 	}
 	services, controlPlane, err := configure(node, cfg)
 	if err != nil {
-		log.Printf("reconfigure: %v", err)
-		return
+		// Never leave the node without its API: fall back to standalone.
+		log.Printf("reconfigure: %v; running standalone", err)
+		quarantineMembership()
+		services, controlPlane, err = configure(node, cfg)
+		if err != nil {
+			log.Printf("standalone configuration: %v", err)
+			return
+		}
 	}
 	startServices(services, cfg)
 	if controlPlane {
-		go applyAddons(cfg, node)
+		go applyAddons(generation(), cfg, node)
 	}
 }
 

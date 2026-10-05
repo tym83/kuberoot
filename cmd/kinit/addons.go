@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
@@ -11,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -98,22 +100,13 @@ spec:
     port: 50000
 `
 
-// applyAddons waits for the API server and applies the bundled cluster add-ons.
-func applyAddons(cfg bootConfig, node nodeInfo) {
-	client, err := adminClient()
-	if err != nil {
-		log.Printf("addons: %v", err)
-		return
-	}
-	for {
-		resp, err := client.Get(apiServer + "/readyz")
-		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				break
-			}
+// applyAddons waits for the API server, applies the bundled cluster add-ons
+// and installs the distribution. It stops with the generation that started it.
+func applyAddons(ctx context.Context, cfg bootConfig, node nodeInfo) {
+	for !apiServerReady() {
+		if !sleepCtx(ctx, time.Second) {
+			return
 		}
-		time.Sleep(time.Second)
 	}
 	log.Printf("kube-apiserver ready, uptime %s", uptime())
 	if err := writeAggregation(node); err != nil {
@@ -125,30 +118,77 @@ func applyAddons(cfg bootConfig, node nodeInfo) {
 	if err := renderPackages(cfg); err != nil {
 		log.Printf("packages: %v", err)
 	}
+	apply := []string{"/usr/bin/kubectl", "--kubeconfig", kubeDir + "/admin.kubeconfig", "apply", "--server-side",
+		"--force-conflicts", "-f", generatedAddonsDir}
+	if !runUntilSuccess(ctx, apply, nil, 5*time.Second) {
+		return
+	}
+	log.Printf("add-ons applied")
+	installDistro(ctx, cfg)
+}
+
+// runUntilSuccess runs a tool until it exits 0, each run capped at two minutes,
+// logging to the add-ons log. It reports false when ctx ended first.
+func runUntilSuccess(ctx context.Context, args, env []string, pause time.Duration) bool {
 	for {
-		cmd := exec.Command("/usr/bin/kubectl", "--kubeconfig", kubeDir+"/admin.kubeconfig", "apply", "--server-side",
-			"-f", generatedAddonsDir)
-		cmd.Env = servicePath
-		out, err := os.OpenFile("/var/log/kuberoot/addons.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-		if err == nil {
-			cmd.Stdout, cmd.Stderr = out, out
+		if runTool(ctx, args, env, 2*time.Minute) {
+			return true
 		}
-		done, err := spawn(cmd)
-		if err == nil && (<-done).ExitStatus() == 0 {
-			out.Close()
-			log.Printf("add-ons applied")
-			installDistro(cfg)
-			return
+		if !sleepCtx(ctx, pause) {
+			return false
 		}
-		out.Close()
-		time.Sleep(5 * time.Second)
 	}
 }
 
-// apiServerReady reports whether the local API server answers /readyz.
-func apiServerReady() bool {
-	client, err := adminClient()
+func runTool(ctx context.Context, args, env []string, timeout time.Duration) bool {
+	cmd := exec.Command(args[0], args[1:]...)
+	cmd.Env = append(append([]string{}, servicePath...), env...)
+	out, err := os.OpenFile("/var/log/kuberoot/addons.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
+		return false
+	}
+	defer out.Close()
+	cmd.Stdout, cmd.Stderr = out, out
+	done, err := spawn(cmd)
+	if err != nil {
+		return false
+	}
+	select {
+	case st := <-done:
+		return st.ExitStatus() == 0
+	case <-ctx.Done():
+	case <-time.After(timeout):
+	}
+	_ = cmd.Process.Kill()
+	<-done
+	return false
+}
+
+// sleepCtx waits d, or less if ctx ends; it reports whether ctx is still live.
+func sleepCtx(ctx context.Context, d time.Duration) bool {
+	select {
+	case <-ctx.Done():
+		return false
+	case <-time.After(d):
+		return true
+	}
+}
+
+var (
+	readyMu     sync.Mutex
+	readyClient *http.Client
+)
+
+// apiServerReady reports whether the local API server answers /readyz. One
+// client is reused, so polling does not pile up connections in PID 1.
+func apiServerReady() bool {
+	readyMu.Lock()
+	if readyClient == nil {
+		readyClient, _ = adminClient() // credentials appear once the PKI is written
+	}
+	client := readyClient
+	readyMu.Unlock()
+	if client == nil {
 		return false
 	}
 	resp, err := client.Get(apiServer + "/readyz")

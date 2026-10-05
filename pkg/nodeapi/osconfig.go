@@ -22,6 +22,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 
 	"github.com/tym83/kuberoot/pkg/apis/node"
+	"github.com/tym83/kuberoot/pkg/atomicfile"
 	"github.com/tym83/kuberoot/pkg/supervisor"
 )
 
@@ -95,7 +96,7 @@ func (s *osConfigStorage) Update(ctx context.Context, name string, objInfo rest.
 	raw, _ := json.Marshal(spec)
 	s.mu.Unlock()
 	_ = os.MkdirAll(filepath.Dir(osConfigState), 0o755)
-	_ = os.WriteFile(osConfigState, raw, 0o600)
+	_ = atomicfile.WriteFile(osConfigState, raw, 0o600)
 	obj := s.current()
 	if r := spec.RebootRequestedAt; r != nil && r.After(obj.Status.BootTime.Time) {
 		go func() {

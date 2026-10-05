@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"github.com/tym83/kuberoot/pkg/atomicfile"
 	"os"
 	"path/filepath"
 	"strings"
@@ -75,7 +76,7 @@ func persistentMachineID() (string, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return "", err
 	}
-	return machineID, os.WriteFile(path, []byte(machineID+"\n"), 0o644)
+	return machineID, atomicfile.WriteFile(path, []byte(machineID+"\n"), 0o644)
 }
 
 // kubeconfig embeds the credentials so the file is usable off the node too.

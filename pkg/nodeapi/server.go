@@ -160,7 +160,7 @@ func Run(ctx context.Context, o Options) error {
 	if err := server.InstallAPIGroup(&group); err != nil {
 		return err
 	}
-	go assessBoot(ctx, kinit)
+	go assessBoot(ctx, kinit, o.NodeName)
 	if o.RoutesKubeconfig != "" {
 		go syncRoutes(ctx, o.RoutesKubeconfig, o.NodeName)
 	}

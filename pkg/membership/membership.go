@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	nodev1 "github.com/tym83/kuberoot/pkg/apis/node/v1alpha1"
+	"github.com/tym83/kuberoot/pkg/atomicfile"
 )
 
 // Path is on the state partition, so membership survives reboots.
@@ -37,7 +38,7 @@ func Save(spec nodev1.MembershipSpec) error {
 	if err := os.MkdirAll(filepath.Dir(Path), 0o700); err != nil {
 		return err
 	}
-	return os.WriteFile(Path, raw, 0o600)
+	return atomicfile.WriteFile(Path, raw, 0o600)
 }
 
 func Remove() error {

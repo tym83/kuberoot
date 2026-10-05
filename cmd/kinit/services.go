@@ -41,6 +41,7 @@ var (
 
 	// A generation is one set of running services; reconfiguring replaces it.
 	genMu     sync.Mutex
+	genCtx    = context.Background()
 	genCancel context.CancelFunc
 	genDone   sync.WaitGroup
 
@@ -181,7 +182,7 @@ func startServices(services []service, cfg bootConfig) {
 	_ = os.WriteFile(filepath.Join(serviceCgroups, "cgroup.subtree_control"), controllers, 0o644)
 	ctx, cancel := context.WithCancel(context.Background())
 	genMu.Lock()
-	genCancel = cancel
+	genCtx, genCancel = ctx, cancel
 	genMu.Unlock()
 	for _, s := range services {
 		genDone.Add(1)
@@ -190,6 +191,14 @@ func startServices(services []service, cfg bootConfig) {
 			supervise(ctx, s, cfg.verbose)
 		}()
 	}
+}
+
+// generation is the context of the running set of services; work tied to the
+// node's current role stops with it.
+func generation() context.Context {
+	genMu.Lock()
+	defer genMu.Unlock()
+	return genCtx
 }
 
 // stopServices ends the current generation: every service gets SIGTERM, then

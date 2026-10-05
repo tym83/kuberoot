@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -22,6 +23,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/tym83/kuberoot/pkg/apis/node"
+	"github.com/tym83/kuberoot/pkg/membership"
 	"github.com/tym83/kuberoot/pkg/supervisor"
 	"github.com/tym83/kuberoot/pkg/upgrade"
 )
@@ -269,7 +271,7 @@ func (s *upgradeStorage) ConvertToTable(_ context.Context, obj runtime.Object, _
 // assessBoot decides whether a slot on probation stays. Healthy means every
 // service running without restarts and the cluster API answering, for a full
 // window; otherwise the node reboots and systemd-boot spends another attempt.
-func assessBoot(ctx context.Context, kinit *supervisor.Client) {
+func assessBoot(ctx context.Context, kinit *supervisor.Client, nodeName string) {
 	if upgrade.CurrentSlot() == "" {
 		return
 	}
@@ -298,7 +300,7 @@ func assessBoot(ctx context.Context, kinit *supervisor.Client) {
 			return
 		case <-time.After(5 * time.Second):
 		}
-		ok, total := healthy(ctx, kinit)
+		ok, total := healthy(ctx, kinit, nodeName)
 		if !ok || total != restarts {
 			healthySince, restarts = time.Time{}, total
 			continue
@@ -319,7 +321,7 @@ func assessBoot(ctx context.Context, kinit *supervisor.Client) {
 	_ = kinit.Reboot(ctx)
 }
 
-func healthy(ctx context.Context, kinit *supervisor.Client) (bool, int) {
+func healthy(ctx context.Context, kinit *supervisor.Client, nodeName string) (bool, int) {
 	statuses, err := kinit.Services(ctx)
 	if err != nil {
 		return false, 0
@@ -331,9 +333,32 @@ func healthy(ctx context.Context, kinit *supervisor.Client) (bool, int) {
 			return false, restarts
 		}
 	}
+	if m, _ := membership.Load(); m != nil {
+		return memberReady(ctx, nodeName), restarts
+	}
 	return clusterReady(), restarts
 }
 
+// memberReady: a member has no API server of its own; it is healthy when the
+// cluster sees it Ready, asked with the kubelet's own credentials.
+func memberReady(ctx context.Context, nodeName string) bool {
+	client := clientFrom("/var/lib/kubelet/kubeconfig")
+	if client == nil {
+		return false
+	}
+	n, err := client.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil {
+		return false
+	}
+	for _, c := range n.Status.Conditions {
+		if c.Type == corev1.NodeReady {
+			return c.Status == corev1.ConditionTrue
+		}
+	}
+	return false
+}
+
+// clusterReady: the control plane node is healthy when its API server is ready.
 func clusterReady() bool {
 	const pki = "/var/lib/kuberoot/pki/"
 	cert, err := tls.LoadX509KeyPair(pki+"admin.crt", pki+"admin.key")

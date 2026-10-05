@@ -9,7 +9,9 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"syscall"
+	"strings"
+	"sync"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -51,28 +53,53 @@ func boot() error {
 	waitForEntropy()
 	cfg := loadCmdline()
 	if err := applySysctls(); err != nil {
-		return err
+		log.Printf("sysctls: %v", err)
 	}
-	node, err := setupNetwork(cfg)
-	if err != nil {
+	go watchPowerButton()
+	go probationWatchdog()
+
+	// Nothing below gives up: an edge node often comes up before its network,
+	// and a node that stops trying can only be fixed by hand.
+	var node nodeInfo
+	retry("network", func() error {
+		var err error
+		node, err = setupNetwork(cfg)
 		return err
-	}
-	if err := setHostname(node); err != nil {
+	})
+	retry("hostname", func() error { return setHostname(node) })
+
+	lifecycle.Lock()
+	defer lifecycle.Unlock()
+	var services []service
+	var controlPlane bool
+	retry("node configuration", func() error {
+		var err error
+		services, controlPlane, err = configure(node, cfg)
 		return err
-	}
-	services, controlPlane, err := configure(node, cfg)
-	if err != nil {
-		return err
-	}
+	})
 	if cfg.dev {
 		printNodeKubeconfig()
 	}
 	serveControl(func() { reconfigure(node, cfg) })
 	startServices(services, cfg)
 	if controlPlane {
-		go applyAddons(cfg, node)
+		go applyAddons(generation(), cfg, node)
 	}
 	return nil
+}
+
+// retry runs step until it succeeds, backing off up to a minute between tries.
+func retry(what string, step func() error) {
+	backoff := 2 * time.Second
+	for attempt := 1; ; attempt++ {
+		err := step()
+		if err == nil {
+			return
+		}
+		log.Printf("%s failed (attempt %d), retrying in %s: %v", what, attempt, backoff, err)
+		time.Sleep(backoff)
+		backoff = min(backoff*2, time.Minute)
+	}
 }
 
 // waitForEntropy says so on the console when the kernel random pool is not ready:
@@ -87,31 +114,74 @@ func waitForEntropy() {
 	log.Printf("random pool ready, uptime %s", uptime())
 }
 
+// lifecycle serialises everything that starts or stops the node's services:
+// boot, role switches and shutdown.
+var (
+	lifecycle    sync.Mutex
+	shuttingDown bool
+)
+
+// waitForSignals reaps children and turns termination signals into a shutdown.
+// The shutdown runs elsewhere: it waits for services to exit, and only this
+// loop reaps them.
 func waitForSignals() {
-	sigs := make(chan os.Signal, 1)
+	sigs := make(chan os.Signal, 16)
 	signal.Notify(sigs, unix.SIGCHLD, unix.SIGTERM, unix.SIGINT, unix.SIGPWR)
 	for sig := range sigs {
 		switch sig {
 		case unix.SIGCHLD:
 			reap()
+		case unix.SIGINT:
+			go shutdown(unix.LINUX_REBOOT_CMD_RESTART, "SIGINT")
 		default:
-			shutdown(sig.(syscall.Signal))
+			go shutdown(unix.LINUX_REBOOT_CMD_POWER_OFF, sig.String())
 		}
 	}
 }
 
-func shutdown(sig syscall.Signal) {
-	log.Printf("received %s, stopping services", sig)
-	stopServices()
-	unix.Sync()
-	// The state partition is ext4 on an installed system; leave it clean.
-	_ = unix.Unmount("/var", unix.MNT_DETACH)
-	unix.Sync()
-	cmd := unix.LINUX_REBOOT_CMD_POWER_OFF
-	if sig == unix.SIGINT {
-		cmd = unix.LINUX_REBOOT_CMD_RESTART
+// shutdown stops the services, then every other process, unmounts the state
+// partition cleanly and powers off or restarts. Only the first call acts.
+func shutdown(cmd int, why string) {
+	lifecycle.Lock()
+	if shuttingDown {
+		lifecycle.Unlock()
+		return
 	}
+	shuttingDown = true
+	log.Printf("%s: stopping services", why)
+	stopServices()
+	lifecycle.Unlock()
+
+	// Container shims and anything else left: ask, wait, then insist.
+	_ = unix.Kill(-1, unix.SIGTERM)
+	time.Sleep(5 * time.Second)
+	_ = unix.Kill(-1, unix.SIGKILL)
+	time.Sleep(time.Second)
+	unix.Sync()
+	unmountState()
+	unix.Sync()
+	log.Printf("%s", map[int]string{unix.LINUX_REBOOT_CMD_RESTART: "restarting", unix.LINUX_REBOOT_CMD_POWER_OFF: "powering off"}[cmd])
 	_ = unix.Reboot(cmd)
+}
+
+// unmountState leaves the ext4 state partition clean: everything mounted below
+// /var goes first, then /var itself; if something still holds it, it is at
+// least made read-only so the journal is consistent.
+func unmountState() {
+	raw, _ := os.ReadFile("/proc/self/mounts")
+	var below []string
+	for _, line := range strings.Split(string(raw), "\n") {
+		f := strings.Fields(line)
+		if len(f) > 1 && strings.HasPrefix(f[1], "/var/") {
+			below = append(below, f[1])
+		}
+	}
+	for i := len(below) - 1; i >= 0; i-- {
+		_ = unix.Unmount(below[i], unix.MNT_DETACH)
+	}
+	if err := unix.Unmount("/var", 0); err != nil {
+		_ = unix.Mount("", "/var", "", unix.MS_REMOUNT|unix.MS_RDONLY, "")
+	}
 }
 
 func uptime() string {

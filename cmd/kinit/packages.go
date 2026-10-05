@@ -1,11 +1,11 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -73,23 +73,11 @@ func repoKey(cfg bootConfig) (string, error) {
 // installDistro installs the distribution's meta package; the kubepkg CLI
 // resolves what it requires and the operator installs it. Packages already
 // present, like CoreDNS with its address, keep their settings.
-func installDistro(cfg bootConfig) {
+func installDistro(ctx context.Context, cfg bootConfig) {
 	pkg := "kuberoot-" + cfg.distro
-	for {
-		cmd := exec.Command("/usr/bin/kubepkg", "install", pkg, "--yes")
-		cmd.Env = append(append([]string{}, servicePath...), "KUBECONFIG="+kubeDir+"/admin.kubeconfig", "HOME="+kubepkgCacheDir)
-		out, err := os.OpenFile("/var/log/kuberoot/addons.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-		if err == nil {
-			cmd.Stdout, cmd.Stderr = out, out
-		}
-		done, err := spawn(cmd)
-		if err == nil && (<-done).ExitStatus() == 0 {
-			out.Close()
-			log.Printf("distribution %s requested from %s", pkg, cfg.repo)
-			return
-		}
-		out.Close()
-		time.Sleep(10 * time.Second)
+	env := []string{"KUBECONFIG=" + kubeDir + "/admin.kubeconfig", "HOME=" + kubepkgCacheDir}
+	if runUntilSuccess(ctx, []string{"/usr/bin/kubepkg", "install", pkg, "--yes"}, env, 10*time.Second) {
+		log.Printf("distribution %s requested from %s", pkg, cfg.repo)
 	}
 }
 

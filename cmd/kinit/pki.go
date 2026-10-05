@@ -10,6 +10,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"github.com/tym83/kuberoot/pkg/atomicfile"
 	"math/big"
 	"net"
 	"os"
@@ -158,10 +159,12 @@ func loadOrCreateAuthority(file, name string) (*authority, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := writePEM(file+".crt", "CERTIFICATE", ca.cert.Raw); err != nil {
+	// Key first: a power cut between the two leaves no certificate, so the
+	// next boot makes a fresh pair instead of finding a certificate without a key.
+	if err := writeKey(file+".key", ca.key); err != nil {
 		return nil, err
 	}
-	return ca, writeKey(file+".key", ca.key)
+	return ca, writePEM(file+".crt", "CERTIFICATE", ca.cert.Raw)
 }
 
 func newAuthority(name string) (*authority, error) {
@@ -228,7 +231,7 @@ func writeKey(name string, key crypto.Signer) error {
 }
 
 func writePEM(name, kind string, der []byte) error {
-	return os.WriteFile(filepath.Join(pkiDir, name), pem.EncodeToMemory(&pem.Block{Type: kind, Bytes: der}), 0o600)
+	return atomicfile.WriteFile(filepath.Join(pkiDir, name), pem.EncodeToMemory(&pem.Block{Type: kind, Bytes: der}), 0o600)
 }
 
 func pkiPath(name string) string { return filepath.Join(pkiDir, name) }

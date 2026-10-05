@@ -41,7 +41,7 @@ func serveControl(reconfigure func()) {
 		go reconfigure()
 	})
 	mux.HandleFunc("POST /v1/reboot", func(http.ResponseWriter, *http.Request) {
-		go shutdown(unix.SIGINT)
+		go shutdown(unix.LINUX_REBOOT_CMD_RESTART, "reboot requested")
 	})
 	go func() { _ = http.Serve(ln, mux) }()
 }
