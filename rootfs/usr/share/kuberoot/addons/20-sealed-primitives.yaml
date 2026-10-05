@@ -1,0 +1,59 @@
+# In sealed namespaces nobody, cluster admins included, changes the primitives
+# by hand: they come from intents. The exceptions are the translator, the
+# cluster's own components, and the users of live Overrides, which the
+# translator lists in the namespace's kuberoot-overrides ConfigMap (sealed too).
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: kuberoot-sealed-primitives
+spec:
+  failurePolicy: Fail
+  paramKind:
+    apiVersion: v1
+    kind: ConfigMap
+  matchConstraints:
+    resourceRules:
+    - apiGroups: ["apps"]
+      apiVersions: ["v1"]
+      operations: ["CREATE", "UPDATE", "DELETE"]
+      resources: ["deployments", "deployments/scale", "statefulsets", "statefulsets/scale", "daemonsets"]
+    - apiGroups: [""]
+      apiVersions: ["v1"]
+      operations: ["CREATE", "UPDATE", "DELETE"]
+      resources: ["services", "configmaps", "secrets"]
+  variables:
+  - name: user
+    expression: request.userInfo.username
+  - name: trusted
+    expression: >-
+      variables.user == 'kuberoot:intents' ||
+      variables.user.startsWith('system:serviceaccount:kube-system:') ||
+      variables.user.startsWith('system:node:') ||
+      variables.user in ['system:kube-controller-manager', 'system:kube-scheduler', 'system:apiserver']
+  - name: overridden
+    expression: >-
+      params != null && has(params.data) && 'users' in params.data &&
+      variables.user in params.data.users.split('\n')
+  validations:
+  - expression: variables.trusted || variables.overridden
+    messageExpression: >-
+      'namespace ' + request.namespace + ' is sealed: ' + request.resource.resource +
+      ' come from intents (App); for an emergency, create an Override'
+    reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: kuberoot-sealed-primitives
+spec:
+  policyName: kuberoot-sealed-primitives
+  validationActions: [Deny]
+  # The ConfigMap of the namespace being changed. The translator creates it as
+  # soon as a namespace is sealed; until then the seal is not in force.
+  paramRef:
+    name: kuberoot-overrides
+    parameterNotFoundAction: Allow
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kuberoot.dev/sealed: "true"

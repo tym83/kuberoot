@@ -72,6 +72,9 @@ func createPKI(node nodeInfo, cn clusterNet) error {
 		{file: "controller-manager", commonName: "system:kube-controller-manager", usages: client},
 		{file: "scheduler", commonName: "system:kube-scheduler", usages: client},
 		{file: "kube-proxy", commonName: "system:kube-proxy", usages: client},
+		// The translator writes the primitives of sealed namespaces; the seal lets
+		// this identity through and nobody else, cluster admins included.
+		{file: "intents", commonName: "kuberoot:intents", orgs: []string{"system:masters"}, usages: client},
 		{file: "kubelet-client", commonName: "system:node:" + node.name, orgs: []string{"system:nodes"}, usages: client},
 		{file: "kubelet-server", commonName: node.name, usages: server,
 			dnsNames: []string{node.name, "localhost"}, ips: []net.IP{node.ip, net.ParseIP("127.0.0.1")}},

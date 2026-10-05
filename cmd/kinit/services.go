@@ -150,6 +150,10 @@ func nodeServices(node nodeInfo, cn clusterNet, cfg bootConfig) []service {
 			"--hostname-override=" + node.name,
 		}},
 		// The package manager of the distribution: cluster add-ons are kubepkg packages.
+		// Intents: lowers Apps to primitives and runs Overrides.
+		{name: "kuberoot-intents", after: apiServerReady, args: []string{"/usr/bin/kuberoot-intents",
+			"--kubeconfig=" + kubeDir + "/intents.kubeconfig",
+		}},
 		{name: "kubepkg-operator", after: apiServerReady,
 			env:  []string{"KUBECONFIG=" + kubeDir + "/admin.kubeconfig", "HOME=/var/lib/kubepkg"},
 			args: kubepkgOperatorArgs(cfg)},

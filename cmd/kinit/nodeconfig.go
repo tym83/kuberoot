@@ -34,7 +34,7 @@ func writeNodeConfig(node nodeInfo, cn clusterNet) error {
 		"/etc/cni/net.d/10-kuberoot.conflist":  fmt.Sprintf(cniConfig, cn.nodeSubnet(node, true)),
 		filepath.Join(kubeDir, "kubelet.yaml"): fmt.Sprintf(kubeletConfig, pkiPath("ca.crt"), cn.dnsIP(), pkiPath("kubelet-server.crt"), pkiPath("kubelet-server.key")),
 	}
-	for _, user := range []string{"admin", "controller-manager", "scheduler", "kube-proxy", "kubelet-client", "node-api-delegation"} {
+	for _, user := range []string{"admin", "controller-manager", "scheduler", "kube-proxy", "kubelet-client", "node-api-delegation", "intents"} {
 		kc, err := kubeconfig(apiServer, "ca.crt", "kuberoot", user)
 		if err != nil {
 			return err
