@@ -11,4 +11,6 @@ BUNDLE="$OUT/bundles/kuberoot-$VERSION-$ARCH.tar"
 mkdir -p "$OUT/bundles"
 tar -C "$OUT" -cf "$BUNDLE" VERSION vmlinuz.efi initrd.cpio rootfs.squashfs
 shasum -a 256 "$BUNDLE" | cut -d' ' -f1 > "$BUNDLE.sha256"
-echo "bundle: ${BUNDLE#$OUT/} ($(du -h "$BUNDLE" | cut -f1)), sha256 $(cat "$BUNDLE.sha256")"
+# Nodes install only bundles signed with a key their image trusts.
+(cd "$OUT/../.." && go run ./cmd/kuberoot-release sign "$BUNDLE" "${KUBEROOT_RELEASE_KEY:-.cache/release.key}" >/dev/null)
+echo "bundle: ${BUNDLE#$OUT/} ($(du -h "$BUNDLE" | cut -f1)), signed, sha256 $(cat "$BUNDLE.sha256")"

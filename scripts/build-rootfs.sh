@@ -12,6 +12,12 @@ OUT="$ROOT/out/$ARCH"
 set -a; . "$ROOT/build/components.env"; set +a
 VERSION=${KUBEROOT_VERSION:-0.1.0-dev}
 DISTRO=${KUBEROOT_DISTRO:-edge}
+# Public keys release bundles must be signed with; a development key is made
+# under .cache the first time.
+RELEASE_PUB=${KUBEROOT_RELEASE_PUB:-$ROOT/.cache/release.pub}
+if [ ! -f "$RELEASE_PUB" ] && [ -z "${KUBEROOT_RELEASE_PUB:-}" ]; then
+  (cd "$ROOT" && go run ./cmd/kuberoot-release keygen .cache/release)
+fi
 [ -f "$ROOT/distros/$DISTRO/profile.yaml" ] || { echo "no distribution $DISTRO" >&2; exit 1; }
 
 case "$ARCH" in
@@ -40,6 +46,7 @@ docker run --rm --platform "$PLATFORM" -v "$OUT/glibc:/glibc" "debian:trixie-sli
 docker run --rm --platform "$PLATFORM" \
   -v "$OUT:/out" -v "$ROOT/.cache/$ARCH:/cache" -v "$ROOT/rootfs:/overlay:ro" \
   -v "$ROOT/distros/$DISTRO:/distro:ro" -e DISTRO="$DISTRO" \
+  -v "$RELEASE_PUB:/release.pub:ro" \
   -e ARCH="$ARCH" -e VERSION="$VERSION" -e K8S_VERSION -e CONTAINERD_VERSION -e RUNC_VERSION -e CNI_VERSION -e KINE_VERSION \
   "alpine:$ALPINE_VERSION" sh -euo pipefail -c '
     apk add --no-cache -q curl squashfs-tools tar
@@ -76,6 +83,7 @@ docker run --rm --platform "$PLATFORM" \
     cp -r /out/glibc/. $r/
     cp -r /overlay/. $r/
     install -m 0644 /distro/profile.yaml $r/usr/share/kuberoot/profile.yaml
+    install -m 0644 /release.pub $r/usr/share/kuberoot/release.pub
     printf "NAME=\"kuberoot\"\nID=kuberoot\nPRETTY_NAME=\"kuberoot %s (%s)\"\nVERSION_ID=%s\nHOME_URL=\"https://github.com/tym83/kuberoot\"\n" "$VERSION" "$DISTRO" "$VERSION" > $r/etc/os-release
     mkdir -p $r/dev $r/proc $r/sys $r/run $r/tmp $r/var $r/etc/kubernetes $r/etc/cni/net.d
     rm -f /out/rootfs.squashfs
