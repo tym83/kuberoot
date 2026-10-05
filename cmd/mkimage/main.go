@@ -20,11 +20,13 @@ func main() {
 	var a bootdisk.Artifacts
 	var out string
 	var dev bool
+	var extra string
 	flag.StringVar(&a.Dir, "artifacts", "", "directory with vmlinuz.efi, initrd.cpio, rootfs.squashfs, systemd-boot.efi")
 	flag.StringVar(&a.Arch, "arch", "arm64", "target architecture")
 	flag.StringVar(&a.Version, "version", "0.1.0-dev", "release version")
 	flag.StringVar(&out, "out", "", "image file to create")
 	flag.BoolVar(&dev, "dev", false, "development media: print node credentials on the console")
+	flag.StringVar(&extra, "args", "", "extra kernel arguments, e.g. kuberoot.ip=eth1:192.168.100.11/24")
 	flag.Parse()
 	if a.Dir == "" || out == "" {
 		log.Fatal("--artifacts and --out are required")
@@ -32,6 +34,9 @@ func main() {
 	a.ConsoleArg = consoleFor(a.Arch)
 	if dev {
 		a.ConsoleArg += " kuberoot.dev kuberoot.nameserver=1.1.1.1"
+	}
+	if extra != "" {
+		a.ConsoleArg += " " + extra
 	}
 	if err := build(a, out); err != nil {
 		log.Fatal(err)

@@ -25,5 +25,6 @@ exec "${machine[@]}" -smp 4 -m 4096 -nographic -no-reboot \
   -kernel "$OUT/kernel" -initrd "$OUT/initramfs.cpio" \
   -append "console=$console panic=-1 ${dns:+kuberoot.nameserver=$dns} ${KAPPEND:-quiet}" \
   -netdev user,id=n0,hostfwd=tcp::6443-:6443,hostfwd=tcp::50000-:50000 \
+  -monitor "unix:$OUT/qemu.monitor,server,nowait" \
   -device virtio-net-pci,netdev=n0 \
   "$@"

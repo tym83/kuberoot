@@ -124,7 +124,9 @@ func (e Entry) String() string {
 
 // LoaderConf picks the highest-version kuberoot entry; entries that ran out of
 // boot attempts sort last, which is what makes a failed upgrade fall back.
-const LoaderConf = "timeout 3\ndefault kuberoot-*\nconsole-mode keep\n"
+// The editor stays off: whoever reaches the console must not be able to add
+// boot arguments.
+const LoaderConf = "timeout 3\ndefault kuberoot-*\nconsole-mode keep\neditor no\n"
 
 // SlotEntry describes the boot entry of an installed slot.
 func SlotEntry(a Artifacts, slot, version string) Entry {

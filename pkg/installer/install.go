@@ -250,16 +250,27 @@ func PartitionOn(diskName, label string) string {
 // CurrentBootArgs are the boot arguments a new slot inherits from the running one.
 func CurrentBootArgs() string { return consoleArgs() }
 
-// consoleArgs carries the console and kuberoot.* settings the media booted with,
-// except the live-only ones, over to the installed system.
-func consoleArgs() string {
+// carriedArgs are the boot arguments an installed system keeps from the media
+// it was installed from: the console and the node's network and cluster
+// settings. Development switches, which print credentials or allow plain HTTP,
+// never carry over.
+var carriedArgs = []string{
+	"console=",
+	"kuberoot.nameserver=", "kuberoot.ip=",
+	"kuberoot.pod-cidr=", "kuberoot.service-cidr=",
+	"kuberoot.distro=", "kuberoot.repo=", "kuberoot.repo-key=",
+}
+
+func consoleArgs() string { return carryArgs(readFile("/proc/cmdline")) }
+
+func carryArgs(cmdline string) string {
 	var args []string
-	for _, f := range strings.Fields(readFile("/proc/cmdline")) {
-		if strings.HasPrefix(f, "kuberoot.root=") || f == "kuberoot.mode=install" || f == "quiet" || strings.HasPrefix(f, "panic=") {
-			continue
-		}
-		if strings.HasPrefix(f, "console=") || strings.HasPrefix(f, "kuberoot.") {
-			args = append(args, f)
+	for _, f := range strings.Fields(cmdline) {
+		for _, prefix := range carriedArgs {
+			if strings.HasPrefix(f, prefix) {
+				args = append(args, f)
+				break
+			}
 		}
 	}
 	return strings.Join(args, " ")

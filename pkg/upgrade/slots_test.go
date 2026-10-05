@@ -31,7 +31,7 @@ func TestReadEntriesStatesAndDefault(t *testing.T) {
 	dir := t.TempDir()
 	writeEntry(t, dir, "kuberoot-a.conf", "0.1.0", "1")
 	writeEntry(t, dir, "kuberoot-b+0-3.conf", "0.1.1", "2") // ran out of attempts
-	writeEntry(t, dir, "loader.conf", "x", "9")              // not a slot entry
+	writeEntry(t, dir, "loader.conf", "x", "9")             // not a slot entry
 	entries, err := readEntriesIn(dir, "a")
 	if err != nil {
 		t.Fatal(err)

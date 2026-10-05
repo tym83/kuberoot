@@ -31,8 +31,12 @@ type bootConfig struct {
 
 func loadCmdline() bootConfig {
 	raw, _ := os.ReadFile("/proc/cmdline")
+	return parseCmdline(string(raw))
+}
+
+func parseCmdline(cmdline string) bootConfig {
 	var cfg bootConfig
-	for _, f := range strings.Fields(string(raw)) {
+	for _, f := range strings.Fields(cmdline) {
 		switch f {
 		case "kuberoot.dev":
 			cfg.dev = true
