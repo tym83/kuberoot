@@ -52,7 +52,8 @@ func boot() error {
 
 	waitForEntropy()
 	cfg := loadCmdline()
-	if err := applySysctls(); err != nil {
+	activeProfile = loadProfileOrRescue()
+	if err := applySysctls(activeProfile.Spec.Sysctls); err != nil {
 		log.Printf("sysctls: %v", err)
 	}
 	go watchPowerButton()

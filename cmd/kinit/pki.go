@@ -36,7 +36,7 @@ type certSpec struct {
 
 // createPKI keeps the cluster CA and service account key across reboots and
 // reissues every leaf certificate, since the node address may have changed.
-func createPKI(node nodeInfo, cn clusterNet) error {
+func createClusterPKI(node nodeInfo, cn clusterNet) error {
 	if err := os.MkdirAll(pkiDir, 0o700); err != nil {
 		return err
 	}
@@ -85,10 +85,7 @@ func createPKI(node nodeInfo, cn clusterNet) error {
 			return fmt.Errorf("issue %s: %w", s.file, err)
 		}
 	}
-	if err := createAggregationPKI(ca); err != nil {
-		return err
-	}
-	return createNodePKI(node)
+	return createAggregationPKI(ca)
 }
 
 // createAggregationPKI lets the cluster API server reach the node API: the
@@ -120,6 +117,9 @@ func createAggregationPKI(clusterCA *authority) error {
 // createNodePKI issues the node's own trust root, separate from the cluster's:
 // the node API exists before a cluster does and outlives it.
 func createNodePKI(node nodeInfo) error {
+	if err := os.MkdirAll(pkiDir, 0o700); err != nil {
+		return err
+	}
 	// The local CA never leaves the node; it vouches for the node's own admin
 	// identity, which the console installer and development builds use.
 	local, err := loadOrCreateAuthority("node-ca", "kuberoot-node-ca "+node.name)

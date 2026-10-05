@@ -20,49 +20,6 @@ const (
 	nodeAdminKubeconfig = "/etc/kuberoot/node-admin.kubeconfig"
 )
 
-// writeNodeConfig generates the PKI and every config file the node services read.
-func writeNodeConfig(node nodeInfo, cn clusterNet) error {
-	if err := createPKI(node, cn); err != nil {
-		return fmt.Errorf("pki: %w", err)
-	}
-	machineID, err := persistentMachineID()
-	if err != nil {
-		return err
-	}
-	files := map[string]string{
-		"/etc/machine-id":                      machineID + "\n",
-		"/etc/containerd/config.toml":          containerdConfig,
-		"/etc/cni/net.d/10-kuberoot.conflist":  fmt.Sprintf(cniConfig, cn.nodeSubnet(node, true)),
-		filepath.Join(kubeDir, "kubelet.yaml"): fmt.Sprintf(kubeletConfig, pkiPath("ca.crt"), cn.dnsIP(), pkiPath("kubelet-server.crt"), pkiPath("kubelet-server.key")),
-	}
-	for _, user := range []string{"admin", "controller-manager", "scheduler", "kube-proxy", "kubelet-client", "node-api-delegation", "intents"} {
-		kc, err := kubeconfig(apiServer, "ca.crt", "kuberoot", user)
-		if err != nil {
-			return err
-		}
-		files[filepath.Join(kubeDir, user+".kubeconfig")] = kc
-	}
-	nodeAdmin, err := kubeconfig(nodeAPIServer, nodeServingCA, node.name, "node-admin")
-	if err != nil {
-		return err
-	}
-	files[nodeAdminKubeconfig] = nodeAdmin
-	for path, content := range files {
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-			return err
-		}
-	}
-	for _, dir := range []string{"/var/lib/kine", "/var/lib/kubelet", "/var/lib/containerd", "/var/log/kuberoot"} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // persistentMachineID keeps the machine identity on the state partition when
 // there is one, so the node looks like the same machine after a reboot.
 func persistentMachineID() (string, error) {

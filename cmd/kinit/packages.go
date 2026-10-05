@@ -17,19 +17,6 @@ const (
 	kubepkgCacheDir = "/var/lib/kubepkg"
 )
 
-func kubepkgOperatorArgs(cfg bootConfig) []string {
-	args := []string{"/usr/bin/kubepkg-operator",
-		"--backend=helm",
-		"--cache-dir=" + kubepkgCacheDir + "/cache",
-		"--metrics-bind-address=0",
-		"--health-probe-bind-address=0",
-	}
-	if cfg.repoPlainHTTP {
-		args = append(args, "--plain-http")
-	}
-	return args
-}
-
 // renderPackages writes the kubepkg CRDs and the cluster's subscription: the
 // repository and the CoreDNS package with this cluster's DNS address.
 func renderPackages(cfg bootConfig) error {
