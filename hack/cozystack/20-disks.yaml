@@ -1,0 +1,22 @@
+apiVersion: apps.cozystack.io/v1alpha1
+kind: VMDisk
+metadata:
+  name: media
+  namespace: tenant-kuberoot
+spec:
+  optical: false
+  source:
+    http:
+      url: http://media-server.tenant-kuberoot.svc:8080/kuberoot-media.img
+  storage: 1Gi
+  storageClass: replicated
+---
+apiVersion: apps.cozystack.io/v1alpha1
+kind: VMDisk
+metadata:
+  name: system
+  namespace: tenant-kuberoot
+spec:
+  optical: false
+  storage: 10Gi
+  storageClass: replicated

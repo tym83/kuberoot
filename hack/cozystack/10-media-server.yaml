@@ -1,0 +1,45 @@
+# Serves the boot media image inside the cluster, so VMDisk can import it over
+# HTTP without publishing it anywhere. Fill it with: kubectl cp <img> <pod>:/srv/
+apiVersion: v1
+kind: Pod
+metadata:
+  name: media-server
+  namespace: tenant-kuberoot
+  labels:
+    app: media-server
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+  - name: httpd
+    image: busybox:stable
+    command: ["httpd", "-f", "-p", "8080", "-h", "/srv"]
+    ports:
+    - containerPort: 8080
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: [ALL]
+    volumeMounts:
+    - name: srv
+      mountPath: /srv
+    resources:
+      limits: {cpu: 500m, memory: 128Mi}
+  volumes:
+  - name: srv
+    emptyDir:
+      sizeLimit: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: media-server
+  namespace: tenant-kuberoot
+spec:
+  selector:
+    app: media-server
+  ports:
+  - port: 8080
