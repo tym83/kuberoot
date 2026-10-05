@@ -298,7 +298,10 @@ type JoinTicket struct {
 }
 
 type JoinTicketSpec struct {
-	// TTL of the bootstrap token; defaults to one hour.
+	// NodeName is the node that will use the ticket; its node API certificate
+	// is issued for this name only.
+	NodeName string `json:"nodeName"`
+	// TTL of the ticket and its bootstrap token: one hour by default, one day at most.
 	TTL *metav1.Duration `json:"ttl,omitempty"`
 }
 

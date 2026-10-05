@@ -726,13 +726,22 @@ func schema_pkg_apis_node_v1alpha1_JoinTicketSpec(ref common.ReferenceCallback) 
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
+					"nodeName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NodeName is the node that will use the ticket; its node API certificate is issued for this name only.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"ttl": {
 						SchemaProps: spec.SchemaProps{
-							Description: "TTL of the bootstrap token; defaults to one hour.",
+							Description: "TTL of the ticket and its bootstrap token: one hour by default, one day at most.",
 							Ref:         ref(v1.Duration{}.OpenAPIModelName()),
 						},
 					},
 				},
+				Required: []string{"nodeName"},
 			},
 		},
 		Dependencies: []string{

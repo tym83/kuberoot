@@ -75,9 +75,11 @@ type member struct{ name, address string }
 type fleet struct {
 	self    string
 	cluster kubernetes.Interface
-	client  *http.Client
+	cert    tls.Certificate
+	pool    *x509.CertPool
 
 	mu      sync.Mutex
+	clients map[string]*http.Client
 	cached  []member
 	fetched time.Time
 }
@@ -93,11 +95,26 @@ func newFleet(self string, cluster kubernetes.Interface, caFile, certFile, keyFi
 	}
 	pool := x509.NewCertPool()
 	pool.AppendCertsFromPEM(caPEM)
-	return &fleet{self: self, cluster: cluster, client: &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: pool,
-			// Members present the certificate the cluster CA issued for the service name.
-			ServerName: "kuberoot-node.kube-system.svc"},
-	}}}, nil
+	return &fleet{self: self, cluster: cluster, cert: cert, pool: pool}, nil
+}
+
+// clientFor talks to one member and accepts only the certificate issued for
+// that member's name: a node that took another's address cannot answer for it.
+func (f *fleet) clientFor(m member) *http.Client {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if c, ok := f.clients[m.name]; ok {
+		return c
+	}
+	if f.clients == nil {
+		f.clients = map[string]*http.Client{}
+	}
+	c := &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{Certificates: []tls.Certificate{f.cert}, RootCAs: f.pool,
+			ServerName: MemberServerName(m.name)},
+	}}
+	f.clients[m.name] = c
+	return c
 }
 
 func (f *fleet) members(ctx context.Context) []member {
@@ -143,7 +160,7 @@ func (f *fleet) do(ctx context.Context, m member, method, path string, body io.R
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	return f.client.Do(req)
+	return f.clientFor(m).Do(req)
 }
 
 // call performs a request on a member and decodes the answer into the internal version.

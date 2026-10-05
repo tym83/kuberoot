@@ -3,6 +3,7 @@ package nodeapi
 import (
 	"context"
 	"crypto/rand"
+	"crypto/x509"
 	"encoding/pem"
 	"fmt"
 	"math/big"
@@ -19,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/uuid"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/yaml"
@@ -35,7 +37,8 @@ const membershipName = "cluster"
 // membershipStorage joins this node to a cluster, or leaves it, by switching
 // the node's role in place.
 type membershipStorage struct {
-	kinit *supervisor.Client
+	kinit    *supervisor.Client
+	nodeName string
 }
 
 var (
@@ -119,6 +122,9 @@ func (s *membershipStorage) apply(ctx context.Context, m *node.Membership) (runt
 	if m.Spec.Server == "" || m.Spec.ClusterCA == "" || m.Spec.BootstrapToken == "" || m.Spec.NodeAPICert == "" || m.Spec.NodeAPIKey == "" {
 		return nil, apierrors.NewBadRequest("server, clusterCA, bootstrapToken, nodeAPICert and nodeAPIKey are required; apply the membership a JoinTicket produced")
 	}
+	if err := certFor(m.Spec.NodeAPICert, MemberServerName(s.nodeName)); err != nil {
+		return nil, apierrors.NewBadRequest("this membership was issued for another node: " + err.Error())
+	}
 	v1 := &nodev1.Membership{}
 	if err := scheme.Convert(m, v1, nil); err != nil {
 		return nil, err
@@ -189,17 +195,25 @@ func (s *joinTicketStorage) Create(ctx context.Context, obj runtime.Object, _ re
 	if t.Name == "" {
 		return nil, apierrors.NewBadRequest("metadata.name is required")
 	}
+	if errs := validation.IsDNS1123Label(t.Spec.NodeName); len(errs) > 0 {
+		return nil, apierrors.NewBadRequest("spec.nodeName: the name of the joining node, " + strings.Join(errs, "; "))
+	}
 	ttl := time.Hour
 	if t.Spec.TTL != nil {
 		ttl = t.Spec.TTL.Duration
+	}
+	if ttl < time.Minute || ttl > 24*time.Hour {
+		return nil, apierrors.NewBadRequest("spec.ttl must be between 1m and 24h")
 	}
 	token, err := s.bootstrapToken(ctx, ttl, t.Name)
 	if err != nil {
 		return nil, apierrors.NewInternalError(fmt.Errorf("bootstrap token: %w", err))
 	}
+	// Named for this node only: the control plane checks it is talking to the
+	// member it means, not to whoever took that member's address.
 	certPEM, keyPEM, err := s.ca.Issue(pki.Spec{
-		CommonName: "kuberoot-node.kube-system.svc",
-		DNSNames:   []string{"kuberoot-node.kube-system.svc", "kuberoot-node.kube-system.svc.cluster.local"},
+		CommonName: MemberServerName(t.Spec.NodeName),
+		DNSNames:   []string{MemberServerName(t.Spec.NodeName)},
 		Server:     true,
 	})
 	if err != nil {
@@ -266,9 +280,23 @@ func randomString(n int) string {
 	return b.String()
 }
 
+// MemberServerName is the name a member's node API certificate is issued for.
+func MemberServerName(nodeName string) string { return nodeName + ".kuberoot-node.kube-system.svc" }
+
+// forgetExpired drops tickets whose token has expired: their secrets are not
+// handed out again. The caller holds s.mu.
+func (s *joinTicketStorage) forgetExpired() {
+	for name, t := range s.items {
+		if t.Status.Expires != nil && time.Now().After(t.Status.Expires.Time) {
+			delete(s.items, name)
+		}
+	}
+}
+
 func (s *joinTicketStorage) Get(_ context.Context, name string, _ *metav1.GetOptions) (runtime.Object, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.forgetExpired()
 	if t, ok := s.items[name]; ok {
 		return t.DeepCopy(), nil
 	}
@@ -278,6 +306,7 @@ func (s *joinTicketStorage) Get(_ context.Context, name string, _ *metav1.GetOpt
 func (s *joinTicketStorage) List(context.Context, *metainternalversion.ListOptions) (runtime.Object, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.forgetExpired()
 	list := &node.JoinTicketList{}
 	for _, t := range s.items {
 		list.Items = append(list.Items, *t.DeepCopy())
@@ -300,6 +329,19 @@ func (s *joinTicketStorage) ConvertToTable(_ context.Context, obj runtime.Object
 			t := o.(*node.JoinTicket)
 			return []any{t.Name, t.Status.Expires.Format(time.RFC3339)}
 		}), nil
+}
+
+// certFor checks that a PEM certificate is issued for name.
+func certFor(certPEM, name string) error {
+	block, _ := pem.Decode([]byte(certPEM))
+	if block == nil {
+		return fmt.Errorf("node API certificate is not PEM")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return err
+	}
+	return cert.VerifyHostname(name)
 }
 
 func readPEM(path string) (string, error) {

@@ -24,7 +24,7 @@ var nodeResources = map[string]func(resourceDeps) rest.Storage{
 	"installations": func(d resourceDeps) rest.Storage { return &installationStorage{kinit: d.kinit} },
 	"bootentries":   func(resourceDeps) rest.Storage { return bootEntryStorage{} },
 	"upgrades":      func(d resourceDeps) rest.Storage { return &upgradeStorage{kinit: d.kinit} },
-	"memberships":   func(d resourceDeps) rest.Storage { return &membershipStorage{kinit: d.kinit} },
+	"memberships":   func(d resourceDeps) rest.Storage { return &membershipStorage{kinit: d.kinit, nodeName: d.nodeName} },
 }
 
 // enabledResources builds the resources a profile asks for; none listed means all.
