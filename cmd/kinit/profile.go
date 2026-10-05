@@ -4,51 +4,27 @@ import (
 	"bytes"
 	"fmt"
 	"log"
-	"os"
 	"path/filepath"
 	"strings"
 	"text/template"
 
-	"sigs.k8s.io/yaml"
+	"github.com/tym83/kuberoot/pkg/distro"
 )
 
 // profilePath is the distribution profile built into the image: what this
 // distribution's node roles generate and run. kinit itself knows no services.
-const profilePath = "/usr/share/kuberoot/profile.yaml"
+const profilePath = distro.Path
 
-type profile struct {
-	APIVersion string `json:"apiVersion"`
-	Kind       string `json:"kind"`
-	Metadata   struct {
-		Name string `json:"name"`
-	} `json:"metadata"`
-	Spec struct {
-		Sysctls map[string]string   `json:"sysctls"`
-		Roles   map[string]roleSpec `json:"roles"`
-	} `json:"spec"`
-}
-
-type roleSpec struct {
-	// Generators, by name, write what the role needs on disk.
-	Generators []string `json:"generators"`
-	// Addons: apply the bundled add-ons and install the distribution's packages.
-	Addons   bool          `json:"addons"`
-	Services []serviceSpec `json:"services"`
-}
-
-type serviceSpec struct {
-	Name string `json:"name"`
-	// After names what must be ready before the first start: apiserver or kubelet-cert.
-	After string   `json:"after"`
-	Env   []string `json:"env"`
-	// Args are templates over the role's facts; arguments that render empty are dropped.
-	Args []string `json:"args"`
-}
+type (
+	profile     = distro.Profile
+	roleSpec    = distro.Role
+	serviceSpec = distro.Service
+)
 
 // Role names in a profile.
 const (
-	roleControlPlane = "controlPlane"
-	roleWorker       = "worker"
+	roleControlPlane = distro.RoleControlPlane
+	roleWorker       = distro.RoleWorker
 )
 
 // activeProfile is the distribution profile this boot runs.
@@ -77,29 +53,16 @@ func loadProfileOrRescue() *profile {
 		return p
 	}
 	log.Printf("distribution profile: %v; running the rescue profile (node API only)", err)
-	p = &profile{}
-	if err := yaml.UnmarshalStrict([]byte(rescueProfile), p); err != nil {
+	p, err = distro.Parse([]byte(rescueProfile), "rescue profile")
+	if err != nil {
 		panic(err)
 	}
 	return p
 }
 
-func loadProfile() (*profile, error) { return loadProfileFile(profilePath) }
+func loadProfile() (*profile, error) { return distro.Load(profilePath) }
 
-func loadProfileFile(path string) (*profile, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	p := &profile{}
-	if err := yaml.UnmarshalStrict(raw, p); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
-	}
-	if p.Kind != "Distribution" {
-		return nil, fmt.Errorf("%s: kind %q, want Distribution", path, p.Kind)
-	}
-	return p, nil
-}
+func loadProfileFile(path string) (*profile, error) { return distro.Load(path) }
 
 // facts are what service templates see.
 type facts struct {

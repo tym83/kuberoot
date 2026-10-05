@@ -20,6 +20,7 @@ import (
 	kruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/registry/rest"
+	"k8s.io/klog/v2"
 
 	"github.com/tym83/kuberoot/pkg/apis/node"
 	"github.com/tym83/kuberoot/pkg/atomicfile"
@@ -51,6 +52,13 @@ func newOSConfigStorage(nodeName string, kinit *supervisor.Client) *osConfigStor
 	s := &osConfigStorage{nodeName: nodeName, kinit: kinit}
 	if raw, err := os.ReadFile(osConfigState); err == nil {
 		_ = json.Unmarshal(raw, &s.spec)
+	}
+	// The spec is desired state: the running system follows it from boot on,
+	// not only from the next change.
+	reapply := s.spec
+	reapply.RebootRequestedAt = nil
+	if err := applyOSSpec(reapply); err != nil {
+		klog.Errorf("applying the stored OS configuration: %v", err)
 	}
 	return s
 }

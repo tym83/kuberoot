@@ -12,6 +12,7 @@ import (
 	"golang.org/x/sys/unix"
 	"k8s.io/klog/v2"
 
+	"github.com/tym83/kuberoot/pkg/distro"
 	"github.com/tym83/kuberoot/pkg/nodeapi"
 )
 
@@ -39,8 +40,14 @@ func main() {
 	flag.StringVar(&o.RoutesKubeconfig, "routes-kubeconfig", "", "credentials to read nodes and route pod subnets between them")
 	flag.StringVar(&o.PodCIDR, "pod-cidr", "", "pod address range of the cluster (control plane node)")
 	flag.StringVar(&o.ServiceCIDR, "service-cidr", "", "service address range of the cluster (control plane node)")
+	profilePath := flag.String("profile", distro.Path, "distribution profile: which node resources to serve")
 	klog.InitFlags(nil)
 	flag.Parse()
+	if p, err := distro.Load(*profilePath); err == nil {
+		o.Resources = p.Spec.NodeAPI.Resources
+	} else {
+		klog.Infof("no distribution profile (%v): serving every node resource", err)
+	}
 
 	o.Kubeconfig = map[string]string{}
 	for _, pair := range strings.Split(kubeconfigs, ",") {

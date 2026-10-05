@@ -68,6 +68,9 @@ type Options struct {
 	PodCIDR     string
 	ServiceCIDR string
 
+	// Resources the distribution serves; empty serves all.
+	Resources []string
+
 	// RoutesKubeconfig reads the nodes to route pod subnets between them.
 	RoutesKubeconfig string
 }
@@ -118,19 +121,13 @@ func Run(ctx context.Context, o Options) error {
 		return err
 	}
 	kinit := supervisor.NewClient()
-	storages := map[string]rest.Storage{
-		"osconfigs":     newOSConfigStorage(o.NodeName, kinit),
-		"nodeservices":  newServiceStorage(kinit),
-		"disks":         diskStorage{},
-		"installations": &installationStorage{kinit: kinit},
-		"bootentries":   bootEntryStorage{},
-		"upgrades":      &upgradeStorage{kinit: kinit},
-		"memberships":   &membershipStorage{kinit: kinit},
-	}
+	storages := enabledResources(o.Resources, resourceDeps{nodeName: o.NodeName, kinit: kinit})
 	logs := &logStorage{kinit: kinit}
 	resources := map[string]rest.Storage{
-		"kubeconfigs":      &kubeconfigStorage{files: o.Kubeconfig},
-		"nodeservices/log": logs,
+		"kubeconfigs": &kubeconfigStorage{files: o.Kubeconfig},
+	}
+	if storages["nodeservices"] != nil {
+		resources["nodeservices/log"] = logs
 	}
 	if o.AdminKubeconfig != "" {
 		admin := clientFrom(o.AdminKubeconfig)
@@ -144,7 +141,9 @@ func Run(ctx context.Context, o Options) error {
 		for name, st := range storages {
 			storages[name] = &fleetStorage{resource: name, local: st, f: f, singleton: name == "osconfigs"}
 		}
-		resources["nodeservices/log"] = &fleetLog{local: logs, f: f}
+		if storages["nodeservices"] != nil {
+			resources["nodeservices/log"] = &fleetLog{local: logs, f: f}
+		}
 		tickets, err := newJoinTickets(admin, o)
 		if err != nil {
 			return fmt.Errorf("join tickets: %w", err)
