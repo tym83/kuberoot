@@ -19,6 +19,7 @@ case "$ARCH" in
 esac
 
 mkdir -p "$OUT" "$ROOT/.cache/$ARCH"
+"$ROOT/scripts/build-kubepkg.sh" "$ARCH"
 for cmd in kinit kuberoot-node kuberoot-installer; do
   GOOS=linux GOARCH=$ARCH CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o "$OUT/$cmd" "$ROOT/cmd/$cmd"
 done
@@ -66,6 +67,9 @@ docker run --rm --platform "$PLATFORM" \
     install -m 0755 /out/kinit $r/usr/sbin/kinit
     install -m 0755 /out/kuberoot-node $r/usr/bin/kuberoot-node
     install -m 0755 /out/kuberoot-installer $r/usr/bin/kuberoot-installer
+    install -m 0755 /out/kubepkg /out/kubepkg-operator $r/usr/bin/
+    mkdir -p $r/usr/share/kuberoot/kubepkg/crds
+    cp /out/kubepkg-crds/*.yaml $r/usr/share/kuberoot/kubepkg/crds/
     cp -r /out/glibc/. $r/
     cp -r /overlay/. $r/
     printf "NAME=\"kuberoot\"\nID=kuberoot\nPRETTY_NAME=\"kuberoot %s (edge)\"\nVERSION_ID=%s\nHOME_URL=\"https://github.com/tym83/kuberoot\"\n" "$VERSION" "$VERSION" > $r/etc/os-release

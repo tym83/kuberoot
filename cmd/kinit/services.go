@@ -25,6 +25,8 @@ type service struct {
 	args []string
 	// console attaches the service to the system console as its controlling terminal.
 	console bool
+	// env is added to the service's environment.
+	env []string
 	// after holds the first start until it returns true, so a service does not
 	// crash just because what it depends on is still coming up.
 	after func() bool
@@ -60,7 +62,7 @@ func setStatus(name string, update func(*supervisor.ServiceStatus)) {
 func logPath(name string) string { return filepath.Join("/var/log/kuberoot", name+".log") }
 
 // nodeServices is what a standalone node, or the control plane node of a cluster, runs.
-func nodeServices(node nodeInfo, cn clusterNet) []service {
+func nodeServices(node nodeInfo, cn clusterNet, cfg bootConfig) []service {
 	ip := node.ip.String()
 	return []service{
 		{name: "kuberoot-node", args: []string{"/usr/bin/kuberoot-node",
@@ -147,6 +149,10 @@ func nodeServices(node nodeInfo, cn clusterNet) []service {
 			"--cluster-cidr=" + cn.pod.String(),
 			"--hostname-override=" + node.name,
 		}},
+		// The package manager of the distribution: cluster add-ons are kubepkg packages.
+		{name: "kubepkg-operator", after: apiServerReady,
+			env:  []string{"KUBECONFIG=" + kubeDir + "/admin.kubeconfig", "HOME=/var/lib/kubepkg"},
+			args: kubepkgOperatorArgs(cfg)},
 	}
 }
 
@@ -249,7 +255,7 @@ func runService(ctx context.Context, s service, verbose bool) (unix.WaitStatus, 
 		out = io.MultiWriter(logFile, &prefixWriter{prefix: "[" + s.name + "] ", w: os.Stdout})
 	}
 	cmd := exec.Command(s.args[0], s.args[1:]...)
-	cmd.Env = servicePath
+	cmd.Env = append(append([]string{}, servicePath...), s.env...)
 	cmd.Stdout, cmd.Stderr = out, out
 	cmd.SysProcAttr = &unix.SysProcAttr{Setsid: true}
 	if s.console {

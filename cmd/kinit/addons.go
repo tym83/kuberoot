@@ -122,6 +122,9 @@ func applyAddons(cfg bootConfig, node nodeInfo) {
 	if err := renderAddons(); err != nil {
 		log.Printf("add-ons: %v", err)
 	}
+	if err := renderPackages(cfg); err != nil {
+		log.Printf("packages: %v", err)
+	}
 	for {
 		cmd := exec.Command("/usr/bin/kubectl", "--kubeconfig", kubeDir+"/admin.kubeconfig", "apply", "--server-side",
 			"-f", generatedAddonsDir)
@@ -134,6 +137,7 @@ func applyAddons(cfg bootConfig, node nodeInfo) {
 		if err == nil && (<-done).ExitStatus() == 0 {
 			out.Close()
 			log.Printf("add-ons applied")
+			installDistro(cfg)
 			return
 		}
 		out.Close()

@@ -33,7 +33,7 @@ func configure(node nodeInfo, cfg bootConfig) ([]service, bool, error) {
 			return nil, false, err
 		}
 		activeNet = cn
-		return nodeServices(node, cn), true, nil
+		return nodeServices(node, cn, cfg), true, nil
 	}
 	log.Printf("joining %s as %s", m.Server, strings.ToLower(m.Role))
 	// A member takes the cluster's address ranges, whatever its own boot arguments say.
