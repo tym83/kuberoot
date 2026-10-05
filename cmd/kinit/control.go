@@ -19,6 +19,9 @@ func serveControl(reconfigure func()) {
 		log.Printf("control socket: %v", err)
 		return
 	}
+	// The directory may exist from boot with wider permissions; only root
+	// may reach the socket that reboots the node.
+	_ = os.Chmod(filepath.Dir(supervisor.Socket), 0o700)
 	_ = os.Remove(supervisor.Socket)
 	ln, err := net.Listen("unix", supervisor.Socket)
 	if err != nil {

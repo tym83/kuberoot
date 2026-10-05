@@ -46,11 +46,11 @@ spec:
         - --endpoint
         - sqlite:///var/lib/kine/state.db?_journal=WAL&_synchronous=FULL&cache=shared
         - --listen-address
-        - 127.0.0.1:2379
+        - unix:///run/kine/kine.sock
       - name: kube-apiserver
         args:
         - /usr/bin/kube-apiserver
-        - --etcd-servers=http://127.0.0.1:2379
+        - --etcd-servers=unix:///run/kine/kine.sock
         - --advertise-address={{.Node.IP}}
         - --secure-port=6443
         - --service-cluster-ip-range={{.Net.Service}}
@@ -68,6 +68,12 @@ spec:
         - --enable-admission-plugins=NodeRestriction
         - --allow-privileged=true
         - --enable-bootstrap-token-auth=true
+        - --admission-control-config-file={{kube "admission.yaml"}}
+        - --encryption-provider-config={{pki "encryption.yaml"}}
+        - --audit-policy-file={{kube "audit-policy.yaml"}}
+        - --audit-log-path=/var/log/kuberoot/audit.log
+        - --audit-log-maxsize=50
+        - --audit-log-maxbackup=3
         # Aggregation: the node API joins the cluster API through the front proxy.
         - --requestheader-client-ca-file={{pki "front-proxy-ca.crt"}}
         - --requestheader-allowed-names=front-proxy-client

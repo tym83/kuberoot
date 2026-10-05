@@ -1,10 +1,14 @@
 package main
 
 import (
+	"crypto/rand"
 	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+
+	"github.com/tym83/kuberoot/pkg/atomicfile"
 
 	nodev1 "github.com/tym83/kuberoot/pkg/apis/node/v1alpha1"
 )
@@ -50,8 +54,20 @@ var generators = map[string]func(roleContext) error{
 			}
 			files[filepath.Join(kubeDir, user+".kubeconfig")] = kc
 		}
+		key, err := encryptionKey()
+		if err != nil {
+			return err
+		}
+		files[filepath.Join(kubeDir, "admission.yaml")] = admissionConfig
+		files[filepath.Join(kubeDir, "audit-policy.yaml")] = auditPolicy
+		files[pkiPath("encryption.yaml")] = fmt.Sprintf(encryptionConfig, key)
 		activeNet = r.net
-		return writeFiles(files, "/var/lib/kine")
+		if err := writeFiles(files, "/var/lib/kine"); err != nil {
+			return err
+		}
+		// kine listens on a socket only root reaches, not on a TCP port any
+		// host-network pod could talk to.
+		return os.MkdirAll("/run/kine", 0o700)
 	},
 	// member: what a member receives from its cluster, and its bootstrap credentials.
 	"member": func(r roleContext) error {
@@ -98,6 +114,68 @@ var generators = map[string]func(roleContext) error{
 		return writeFiles(map[string]string{filepath.Join(kubeDir, "kubelet.yaml"): cfg}, "/var/lib/kubelet")
 	},
 }
+
+// encryptionKey is the key Secrets are encrypted with in the store, made once
+// and kept with the cluster's PKI.
+func encryptionKey() (string, error) {
+	path := pkiPath("encryption.key")
+	if raw, err := os.ReadFile(path); err == nil {
+		return strings.TrimSpace(string(raw)), nil
+	}
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		return "", err
+	}
+	encoded := base64.StdEncoding.EncodeToString(key)
+	return encoded, atomicfile.WriteFile(path, []byte(encoded+"\n"), 0o600)
+}
+
+// admissionConfig makes the baseline Pod Security Standard the default
+// everywhere but kube-system; a namespace that needs more asks for it with
+// the usual pod-security.kubernetes.io labels.
+const admissionConfig = `apiVersion: apiserver.config.k8s.io/v1
+kind: AdmissionConfiguration
+plugins:
+- name: PodSecurity
+  configuration:
+    apiVersion: pod-security.admission.config.k8s.io/v1
+    kind: PodSecurityConfiguration
+    defaults:
+      enforce: baseline
+      enforce-version: latest
+      warn: restricted
+      warn-version: latest
+    exemptions:
+      namespaces: [kube-system]
+`
+
+// auditPolicy records who changed what; reads stay out of the log.
+const auditPolicy = `apiVersion: audit.k8s.io/v1
+kind: Policy
+omitStages: [RequestReceived]
+rules:
+- level: None
+  verbs: [get, list, watch]
+- level: None
+  resources:
+  - group: coordination.k8s.io
+    resources: [leases]
+  - group: ""
+    resources: [events]
+- level: Metadata
+`
+
+const encryptionConfig = `apiVersion: apiserver.config.k8s.io/v1
+kind: EncryptionConfiguration
+resources:
+- resources: [secrets]
+  providers:
+  - secretbox:
+      keys:
+      - name: key1
+        secret: %s
+  - identity: {}
+`
 
 func writeFiles(files map[string]string, dirs ...string) error {
 	for path, content := range files {
