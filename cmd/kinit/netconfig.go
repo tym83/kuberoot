@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
-	"strings"
 )
 
 // Defaults stay clear of the ranges kubeadm, Talos and Cozystack use, since
@@ -39,7 +38,7 @@ func parseClusterNet(podCIDR, serviceCIDR string) (clusterNet, error) {
 		return clusterNet{}, fmt.Errorf("service CIDR %q: %w", serviceCIDR, err)
 	}
 	if ones, _ := pod.Mask.Size(); ones > 22 {
-		return clusterNet{}, fmt.Errorf("pod CIDR %s is too small: each node takes a /24", podCIDR)
+		return clusterNet{}, fmt.Errorf("pod CIDR %s is too small: the control plane hands each node a /24", podCIDR)
 	}
 	return clusterNet{pod: pod, service: svc}, nil
 }
@@ -56,30 +55,6 @@ func (c clusterNet) serviceIP(n uint32) net.IP {
 func (c clusterNet) apiServiceIP() net.IP { return c.serviceIP(1) }
 func (c clusterNet) dnsIP() net.IP        { return c.serviceIP(10) }
 
-// nodeSubnet is a node's /24 of the pod range. The control plane takes the
-// first one; others are picked by the last octet of the node address, which
-// is stable without coordination as long as nodes share one /24 network.
-func (c clusterNet) nodeSubnet(node nodeInfo, controlPlane bool) string {
-	ones, _ := c.pod.Mask.Size()
-	slots := uint32(1) << (24 - ones)
-	index := uint32(0)
-	if !controlPlane {
-		index = uint32(node.ip.To4()[3]) % slots
-		if index == 0 {
-			index = 1 % slots
-		}
-	}
-	base := binary.BigEndian.Uint32(c.pod.IP.To4())
-	ip := make(net.IP, 4)
-	binary.BigEndian.PutUint32(ip, base+index<<8)
-	return ip.String() + "/24"
-}
-
 func (c clusterNet) String() string {
 	return fmt.Sprintf("pods %s, services %s", c.pod, c.service)
-}
-
-// podSubnetLabel publishes the node's pod subnet for the other nodes' routes.
-func podSubnetLabel(cidr string) string {
-	return "kuberoot.dev/pod-subnet=" + strings.Replace(cidr, "/", "-", 1)
 }

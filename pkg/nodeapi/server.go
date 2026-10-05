@@ -4,6 +4,7 @@ import (
 	"context"
 	cryptox509 "crypto/x509"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
@@ -161,7 +162,8 @@ func Run(ctx context.Context, o Options) error {
 	}
 	go assessBoot(ctx, kinit, o.NodeName)
 	if o.RoutesKubeconfig != "" {
-		go syncRoutes(ctx, o.RoutesKubeconfig, o.NodeName)
+		_, podRange, _ := net.ParseCIDR(o.PodCIDR)
+		go syncRoutes(ctx, o.RoutesKubeconfig, o.NodeName, podRange)
 	}
 	return server.PrepareRun().RunWithContext(ctx)
 }

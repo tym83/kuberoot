@@ -90,6 +90,12 @@ spec:
         - --cluster-signing-key-file={{pki "ca.key"}}
         - --use-service-account-credentials=true
         - --controllers=*,bootstrapsigner,tokencleaner
+        # Pod subnets are assigned here, not chosen by each node: routes to them
+        # cannot be redirected by a node that lies about itself.
+        - --allocate-node-cidrs=true
+        - --cluster-cidr={{.Net.Pod}}
+        - --node-cidr-mask-size=24
+        - --service-cluster-ip-range={{.Net.Service}}
         - --leader-elect=false
       - name: kube-scheduler
         after: apiserver
@@ -107,7 +113,6 @@ spec:
         - --kubeconfig={{kube "kubelet-client.kubeconfig"}}
         - --hostname-override={{.Node.Name}}
         - --node-ip={{.Node.IP}}
-        - --node-labels={{.Net.SubnetLabel}}
       - name: kube-proxy
         after: apiserver
         args:
@@ -147,6 +152,7 @@ spec:
         - --cluster-tls-private-key-file={{cluster "node-api.key"}}
         - --proxy-trust-ca-file={{cluster "ca.crt"}}
         - --routes-kubeconfig=/var/lib/kubelet/kubeconfig
+        - --pod-cidr={{.Net.Pod}}
       - name: containerd
         args: [/usr/bin/containerd, --config, /etc/containerd/config.toml]
       - name: kubelet
@@ -158,7 +164,6 @@ spec:
         - --cert-dir=/var/lib/kubelet/pki
         - --hostname-override={{.Node.Name}}
         - --node-ip={{.Node.IP}}
-        - --node-labels={{.Net.SubnetLabel}}
       - name: kube-proxy
         after: kubelet-cert
         args:

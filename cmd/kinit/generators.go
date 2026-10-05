@@ -18,8 +18,6 @@ type roleContext struct {
 	member       *nodev1.MembershipSpec // set for a member of another node's cluster
 }
 
-func (r roleContext) nodeSubnet() string { return r.net.nodeSubnet(r.node, r.controlPlane) }
-
 // generators write what a role needs on disk; a distribution profile picks
 // the ones its roles use.
 var generators = map[string]func(roleContext) error{
@@ -80,12 +78,15 @@ var generators = map[string]func(roleContext) error{
 			filepath.Join(kubeDir, "kube-proxy.kubeconfig"): fmt.Sprintf(fileKubeconfig, m.Server, ca, kubeletPKI, kubeletPKI),
 		})
 	},
-	// containers: containerd and the bridge CNI for this node's pod subnet.
+	// containers: containerd and the bridge CNI template, filled with the pod
+	// subnet the control plane assigns to this node.
 	"containers": func(r roleContext) error {
+		// A configuration left from a previous role or cluster has the wrong subnet.
+		_ = os.RemoveAll("/etc/cni/net.d")
 		return writeFiles(map[string]string{
-			"/etc/containerd/config.toml":         containerdConfig,
-			"/etc/cni/net.d/10-kuberoot.conflist": fmt.Sprintf(cniConfig, r.nodeSubnet()),
-		}, "/var/lib/containerd")
+			"/etc/containerd/config.toml":     containerdConfig,
+			"/etc/cni/kuberoot.conflist.tmpl": cniConfig,
+		}, "/var/lib/containerd", "/etc/cni/net.d")
 	},
 	// kubelet: its configuration, with serving certificates from the cluster CA
 	// on the control plane and requested through the CSR API on members.

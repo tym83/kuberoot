@@ -85,6 +85,9 @@ state = "/run/containerd"
 [plugins.'io.containerd.cri.v1.runtime'.cni]
   bin_dirs = ["/usr/libexec/cni"]
   conf_dir = "/etc/cni/net.d"
+  # The kubelet passes the pod subnet the control plane assigned to this node;
+  # containerd fills it into this template and writes the CNI configuration.
+  conf_template = "/etc/cni/kuberoot.conflist.tmpl"
 
 [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runc]
   runtime_type = "io.containerd.runc.v2"
@@ -107,7 +110,7 @@ const cniConfig = `{
       "hairpinMode": true,
       "ipam": {
         "type": "host-local",
-        "ranges": [[{"subnet": "%s"}]],
+        "ranges": [[{"subnet": "{{.PodCIDR}}"}]],
         "routes": [{"dst": "0.0.0.0/0"}]
       }
     },

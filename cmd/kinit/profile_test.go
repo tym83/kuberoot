@@ -8,8 +8,7 @@ import (
 func edgeFacts(plainHTTP bool) facts {
 	var f facts
 	f.Node.Name, f.Node.IP = "node-1", "192.168.100.11"
-	f.Net.Pod, f.Net.Service, f.Net.NodeSubnet, f.Net.DNS = "10.200.0.0/16", "10.201.0.0/16", "10.200.0.0/24", "10.201.0.10"
-	f.Net.SubnetLabel = podSubnetLabel(f.Net.NodeSubnet)
+	f.Net.Pod, f.Net.Service, f.Net.DNS = "10.200.0.0/16", "10.201.0.0/16", "10.201.0.10"
 	f.Boot.Distro, f.Boot.RepoPlainHTTP = "edge", plainHTTP
 	return f
 }
@@ -61,8 +60,8 @@ func TestEdgeProfileArguments(t *testing.T) {
 	if a := args(false, "kube-apiserver"); !strings.Contains(a, "--service-cluster-ip-range=10.201.0.0/16") || !strings.Contains(a, "--advertise-address=192.168.100.11") {
 		t.Errorf("kube-apiserver: %s", a)
 	}
-	if a := args(false, "kubelet"); !strings.Contains(a, "--node-labels=kuberoot.dev/pod-subnet=10.200.0.0-24") {
-		t.Errorf("kubelet: %s", a)
+	if a := args(false, "kube-controller-manager"); !strings.Contains(a, "--allocate-node-cidrs=true") || !strings.Contains(a, "--cluster-cidr=10.200.0.0/16") {
+		t.Errorf("kube-controller-manager: %s", a)
 	}
 	if strings.Contains(args(false, "kubepkg-operator"), "--plain-http") || !strings.Contains(args(true, "kubepkg-operator"), "--plain-http") {
 		t.Error("--plain-http does not follow kuberoot.repo-plain-http")

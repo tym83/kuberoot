@@ -18,7 +18,7 @@ for i in $(seq 1 "$NODES"); do
   [ "$i" = 1 ] && link="listen=127.0.0.1:5560"
   qemu-system-aarch64 -M virt -accel hvf -cpu host -smp 2 -m 3072 -nographic -no-reboot \
     -kernel "$OUT/kernel" -initrd "$OUT/initramfs.cpio" \
-    -append "console=ttyAMA0 panic=-1 loglevel=4 kuberoot.dev kuberoot.nameserver=1.1.1.1 kuberoot.ip=eth1:192.168.100.1$i/24" \
+    -append "console=ttyAMA0 panic=-1 loglevel=4 kuberoot.dev kuberoot.nameserver=1.1.1.1 kuberoot.ip=eth1:192.168.100.1$i/24 ${EXTRA_ARGS:-}" \
     -netdev "user,id=n0,$fwd" -device "virtio-net-pci,netdev=n0,mac=52:54:00:00:01:0$i" \
     -netdev "socket,id=n1,$link" -device "virtio-net-pci,netdev=n1,mac=52:54:00:00:02:0$i" \
     -device virtio-rng-pci > "$ROOT/out-node$i.log" 2>&1 &
