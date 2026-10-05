@@ -1016,6 +1016,19 @@ func schema_pkg_apis_node_v1alpha1_MembershipSpec(ref common.ReferenceCallback) 
 							Format:  "",
 						},
 					},
+					"podCIDR": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PodCIDR and ServiceCIDR are the cluster's address ranges.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"serviceCIDR": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
 				},
 				Required: []string{"role", "server", "clusterCA", "bootstrapToken", "nodeAPICert", "nodeAPIKey"},
 			},
@@ -1353,9 +1366,17 @@ func schema_pkg_apis_node_v1alpha1_OSConfigSpec(ref common.ReferenceCallback) co
 							},
 						},
 					},
+					"rebootRequestedAt": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RebootRequestedAt reboots the node when set to a time after its last boot.",
+							Ref:         ref(v1.Time{}.OpenAPIModelName()),
+						},
+					},
 				},
 			},
 		},
+		Dependencies: []string{
+			v1.Time{}.OpenAPIModelName()},
 	}
 }
 

@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -16,6 +18,26 @@ const (
 	addonsDir          = "/usr/share/kuberoot/addons"
 	generatedAddonsDir = "/run/kuberoot/addons"
 )
+
+// renderAddons copies the bundled add-ons next to the generated ones, filling in
+// the addresses that depend on the cluster's ranges.
+func renderAddons() error {
+	entries, err := os.ReadDir(addonsDir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		raw, err := os.ReadFile(filepath.Join(addonsDir, e.Name()))
+		if err != nil {
+			return err
+		}
+		out := strings.ReplaceAll(string(raw), "__CLUSTER_DNS__", activeNet.dnsIP().String())
+		if err := os.WriteFile(filepath.Join(generatedAddonsDir, e.Name()), []byte(out), 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // writeAggregation registers the node API with the cluster API server. The
 // Service has no selector: its endpoint is the node itself, not a pod.
@@ -97,9 +119,12 @@ func applyAddons(cfg bootConfig, node nodeInfo) {
 	if err := writeAggregation(node); err != nil {
 		log.Printf("aggregation manifest: %v", err)
 	}
+	if err := renderAddons(); err != nil {
+		log.Printf("add-ons: %v", err)
+	}
 	for {
 		cmd := exec.Command("/usr/bin/kubectl", "--kubeconfig", kubeDir+"/admin.kubeconfig", "apply", "--server-side",
-			"-f", addonsDir, "-f", generatedAddonsDir)
+			"-f", generatedAddonsDir)
 		cmd.Env = servicePath
 		out, err := os.OpenFile("/var/log/kuberoot/addons.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 		if err == nil {
@@ -114,6 +139,20 @@ func applyAddons(cfg bootConfig, node nodeInfo) {
 		out.Close()
 		time.Sleep(5 * time.Second)
 	}
+}
+
+// apiServerReady reports whether the local API server answers /readyz.
+func apiServerReady() bool {
+	client, err := adminClient()
+	if err != nil {
+		return false
+	}
+	resp, err := client.Get(apiServer + "/readyz")
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
 }
 
 func adminClient() (*http.Client, error) {

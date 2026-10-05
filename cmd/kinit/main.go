@@ -60,7 +60,7 @@ func boot() error {
 	if err := setHostname(node); err != nil {
 		return err
 	}
-	services, controlPlane, err := configure(node)
+	services, controlPlane, err := configure(node, cfg)
 	if err != nil {
 		return err
 	}

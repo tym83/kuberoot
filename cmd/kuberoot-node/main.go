@@ -37,6 +37,8 @@ func main() {
 	flag.StringVar(&o.ProxyClientKey, "proxy-client-key-file", "", "key of the proxy identity")
 	flag.StringVar(&o.ProxyTrustCA, "proxy-trust-ca-file", "", "CA of the control plane proxy identity (member node)")
 	flag.StringVar(&o.RoutesKubeconfig, "routes-kubeconfig", "", "credentials to read nodes and route pod subnets between them")
+	flag.StringVar(&o.PodCIDR, "pod-cidr", "", "pod address range of the cluster (control plane node)")
+	flag.StringVar(&o.ServiceCIDR, "service-cidr", "", "service address range of the cluster (control plane node)")
 	klog.InitFlags(nil)
 	flag.Parse()
 

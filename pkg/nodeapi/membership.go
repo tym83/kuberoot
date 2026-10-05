@@ -167,13 +167,15 @@ func (s *membershipStorage) ConvertToTable(_ context.Context, obj runtime.Object
 
 // joinTicketStorage issues join tickets on the control plane node.
 type joinTicketStorage struct {
-	cluster   kubernetes.Interface
-	ca        *pki.Authority
-	caPEM     string
-	frontPEM  string
-	advertise string
-	mu        sync.Mutex
-	items     map[string]*node.JoinTicket
+	cluster     kubernetes.Interface
+	ca          *pki.Authority
+	caPEM       string
+	frontPEM    string
+	advertise   string
+	podCIDR     string
+	serviceCIDR string
+	mu          sync.Mutex
+	items       map[string]*node.JoinTicket
 }
 
 func (s *joinTicketStorage) New() runtime.Object     { return &node.JoinTicket{} }
@@ -214,6 +216,8 @@ func (s *joinTicketStorage) Create(ctx context.Context, obj runtime.Object, _ re
 			FrontProxyCA:   s.frontPEM,
 			NodeAPICert:    string(certPEM),
 			NodeAPIKey:     string(keyPEM),
+			PodCIDR:        s.podCIDR,
+			ServiceCIDR:    s.serviceCIDR,
 		},
 	}
 	manifest, err := yaml.Marshal(m)
@@ -319,5 +323,6 @@ func newJoinTickets(cluster kubernetes.Interface, o Options) (*joinTicketStorage
 		return nil, err
 	}
 	frontPEM, _ := readPEM(o.RequestHeaderCA)
-	return &joinTicketStorage{cluster: cluster, ca: ca, caPEM: caPEM, frontPEM: frontPEM, advertise: o.Advertise}, nil
+	return &joinTicketStorage{cluster: cluster, ca: ca, caPEM: caPEM, frontPEM: frontPEM, advertise: o.Advertise,
+		podCIDR: o.PodCIDR, serviceCIDR: o.ServiceCIDR}, nil
 }

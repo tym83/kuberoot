@@ -64,6 +64,10 @@ type Options struct {
 	// Member node: trusts the control plane's proxy identity from this CA.
 	ProxyTrustCA string
 
+	// PodCIDR and ServiceCIDR of the cluster, handed to joining nodes.
+	PodCIDR     string
+	ServiceCIDR string
+
 	// RoutesKubeconfig reads the nodes to route pod subnets between them.
 	RoutesKubeconfig string
 }
@@ -115,7 +119,7 @@ func Run(ctx context.Context, o Options) error {
 	}
 	kinit := supervisor.NewClient()
 	storages := map[string]rest.Storage{
-		"osconfigs":     newOSConfigStorage(o.NodeName),
+		"osconfigs":     newOSConfigStorage(o.NodeName, kinit),
 		"nodeservices":  newServiceStorage(kinit),
 		"disks":         diskStorage{},
 		"installations": &installationStorage{kinit: kinit},
@@ -146,6 +150,7 @@ func Run(ctx context.Context, o Options) error {
 			return fmt.Errorf("join tickets: %w", err)
 		}
 		resources["jointickets"] = tickets
+		go approveKubeletServing(ctx, admin)
 	}
 	for name, st := range storages {
 		resources[name] = st

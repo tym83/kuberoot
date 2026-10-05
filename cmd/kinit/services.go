@@ -25,6 +25,9 @@ type service struct {
 	args []string
 	// console attaches the service to the system console as its controlling terminal.
 	console bool
+	// after holds the first start until it returns true, so a service does not
+	// crash just because what it depends on is still coming up.
+	after func() bool
 }
 
 // children maps the PIDs kinit started to the channel waiting for their exit.
@@ -57,7 +60,7 @@ func setStatus(name string, update func(*supervisor.ServiceStatus)) {
 func logPath(name string) string { return filepath.Join("/var/log/kuberoot", name+".log") }
 
 // nodeServices is what a standalone node, or the control plane node of a cluster, runs.
-func nodeServices(node nodeInfo) []service {
+func nodeServices(node nodeInfo, cn clusterNet) []service {
 	ip := node.ip.String()
 	return []service{
 		{name: "kuberoot-node", args: []string{"/usr/bin/kuberoot-node",
@@ -77,6 +80,8 @@ func nodeServices(node nodeInfo) []service {
 			"--proxy-client-cert-file=" + pkiPath("node-api-proxy.crt"),
 			"--proxy-client-key-file=" + pkiPath("node-api-proxy.key"),
 			"--routes-kubeconfig=" + kubeDir + "/admin.kubeconfig",
+			"--pod-cidr=" + cn.pod.String(),
+			"--service-cidr=" + cn.service.String(),
 		}},
 		{name: "containerd", args: []string{"/usr/bin/containerd", "--config", "/etc/containerd/config.toml"}},
 		{name: "kine", args: []string{"/usr/bin/kine",
@@ -86,13 +91,14 @@ func nodeServices(node nodeInfo) []service {
 			"--etcd-servers=http://127.0.0.1:2379",
 			"--advertise-address=" + ip,
 			"--secure-port=6443",
-			"--service-cluster-ip-range=" + serviceCIDR,
+			"--service-cluster-ip-range=" + cn.service.String(),
 			"--client-ca-file=" + pkiPath("ca.crt"),
 			"--tls-cert-file=" + pkiPath("apiserver.crt"),
 			"--tls-private-key-file=" + pkiPath("apiserver.key"),
 			"--kubelet-client-certificate=" + pkiPath("apiserver-kubelet-client.crt"),
 			"--kubelet-client-key=" + pkiPath("apiserver-kubelet-client.key"),
 			"--kubelet-preferred-address-types=InternalIP",
+			"--kubelet-certificate-authority=" + pkiPath("ca.crt"),
 			"--service-account-issuer=https://kubernetes.default.svc.cluster.local",
 			"--service-account-key-file=" + pkiPath("sa.pub"),
 			"--service-account-signing-key-file=" + pkiPath("sa.key"),
@@ -110,7 +116,7 @@ func nodeServices(node nodeInfo) []service {
 			"--proxy-client-key-file=" + pkiPath("front-proxy-client.key"),
 			"--enable-aggregator-routing=true",
 		}},
-		{name: "kube-controller-manager", args: []string{"/usr/bin/kube-controller-manager",
+		{name: "kube-controller-manager", after: apiServerReady, args: []string{"/usr/bin/kube-controller-manager",
 			"--kubeconfig=" + kubeDir + "/controller-manager.kubeconfig",
 			"--authentication-kubeconfig=" + kubeDir + "/controller-manager.kubeconfig",
 			"--authorization-kubeconfig=" + kubeDir + "/controller-manager.kubeconfig",
@@ -122,23 +128,23 @@ func nodeServices(node nodeInfo) []service {
 			"--controllers=*,bootstrapsigner,tokencleaner",
 			"--leader-elect=false",
 		}},
-		{name: "kube-scheduler", args: []string{"/usr/bin/kube-scheduler",
+		{name: "kube-scheduler", after: apiServerReady, args: []string{"/usr/bin/kube-scheduler",
 			"--kubeconfig=" + kubeDir + "/scheduler.kubeconfig",
 			"--authentication-kubeconfig=" + kubeDir + "/scheduler.kubeconfig",
 			"--authorization-kubeconfig=" + kubeDir + "/scheduler.kubeconfig",
 			"--leader-elect=false",
 		}},
-		{name: "kubelet", args: []string{"/usr/bin/kubelet",
+		{name: "kubelet", after: apiServerReady, args: []string{"/usr/bin/kubelet",
 			"--config=" + kubeDir + "/kubelet.yaml",
 			"--kubeconfig=" + kubeDir + "/kubelet-client.kubeconfig",
 			"--hostname-override=" + node.name,
 			"--node-ip=" + ip,
-			"--node-labels=" + podSubnetLabel(podCIDR),
+			"--node-labels=" + podSubnetLabel(cn.nodeSubnet(node, true)),
 		}},
-		{name: "kube-proxy", args: []string{"/usr/bin/kube-proxy",
+		{name: "kube-proxy", after: apiServerReady, args: []string{"/usr/bin/kube-proxy",
 			"--kubeconfig=" + kubeDir + "/kube-proxy.kubeconfig",
 			"--proxy-mode=nftables",
-			"--cluster-cidr=" + clusterCIDR,
+			"--cluster-cidr=" + cn.pod.String(),
 			"--hostname-override=" + node.name,
 		}},
 	}
@@ -192,6 +198,16 @@ func stopServices() {
 
 // supervise keeps a service running, restarting it with backoff when it exits.
 func supervise(ctx context.Context, s service, verbose bool) {
+	if s.after != nil {
+		setStatus(s.name, func(st *supervisor.ServiceStatus) { st.State = supervisor.StateWaiting })
+		for !s.after() {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Second):
+			}
+		}
+	}
 	backoff := time.Second
 	for ctx.Err() == nil {
 		started := time.Now()

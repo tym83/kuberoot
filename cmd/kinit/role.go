@@ -19,22 +19,32 @@ const clusterDir = "/var/lib/kuberoot/cluster"
 
 // configure writes the configuration for the node's current role and returns
 // the services that role runs. A node without a membership runs its own cluster.
-func configure(node nodeInfo) ([]service, bool, error) {
+func configure(node nodeInfo, cfg bootConfig) ([]service, bool, error) {
 	m, err := membership.Load()
 	if err != nil {
 		return nil, false, fmt.Errorf("membership: %w", err)
 	}
 	if m == nil {
-		if err := writeNodeConfig(node); err != nil {
+		cn, err := parseClusterNet(cfg.podCIDR, cfg.serviceCIDR)
+		if err != nil {
 			return nil, false, err
 		}
-		return nodeServices(node), true, nil
+		if err := writeNodeConfig(node, cn); err != nil {
+			return nil, false, err
+		}
+		activeNet = cn
+		return nodeServices(node, cn), true, nil
 	}
 	log.Printf("joining %s as %s", m.Server, strings.ToLower(m.Role))
-	if err := writeWorkerConfig(node, *m); err != nil {
+	// A member takes the cluster's address ranges, whatever its own boot arguments say.
+	cn, err := parseClusterNet(m.PodCIDR, m.ServiceCIDR)
+	if err != nil {
 		return nil, false, err
 	}
-	return workerServices(node), false, nil
+	if err := writeWorkerConfig(node, *m, cn); err != nil {
+		return nil, false, err
+	}
+	return workerServices(node, cn), false, nil
 }
 
 // reconfigure switches roles in place: the node joined or left a cluster.
@@ -46,7 +56,7 @@ func reconfigure(node nodeInfo, cfg bootConfig) {
 	if link, err := netlink.LinkByName("cni0"); err == nil {
 		_ = netlink.LinkDel(link)
 	}
-	services, controlPlane, err := configure(node)
+	services, controlPlane, err := configure(node, cfg)
 	if err != nil {
 		log.Printf("reconfigure: %v", err)
 		return
@@ -57,7 +67,7 @@ func reconfigure(node nodeInfo, cfg bootConfig) {
 	}
 }
 
-func writeWorkerConfig(node nodeInfo, m nodev1.MembershipSpec) error {
+func writeWorkerConfig(node nodeInfo, m nodev1.MembershipSpec, cn clusterNet) error {
 	if err := os.MkdirAll(pkiDir, 0o700); err != nil {
 		return err
 	}
@@ -87,8 +97,8 @@ func writeWorkerConfig(node nodeInfo, m nodev1.MembershipSpec) error {
 	files := map[string]string{
 		"/etc/machine-id":                              machineID + "\n",
 		"/etc/containerd/config.toml":                  containerdConfig,
-		"/etc/cni/net.d/10-kuberoot.conflist":          fmt.Sprintf(cniConfig, workerPodCIDR(node)),
-		filepath.Join(kubeDir, "kubelet.yaml"):         workerKubeletConfig(filepath.Join(clusterDir, "ca.crt")),
+		"/etc/cni/net.d/10-kuberoot.conflist":          fmt.Sprintf(cniConfig, cn.nodeSubnet(node, false)),
+		filepath.Join(kubeDir, "kubelet.yaml"):         workerKubeletConfig(filepath.Join(clusterDir, "ca.crt"), cn),
 		filepath.Join(kubeDir, "bootstrap.kubeconfig"): fmt.Sprintf(tokenKubeconfig, m.Server, ca, m.BootstrapToken),
 		// kube-proxy acts with the node's own identity, which the cluster binds to the proxier role.
 		filepath.Join(kubeDir, "kube-proxy.kubeconfig"): fmt.Sprintf(fileKubeconfig, m.Server, ca, kubeletPKI, kubeletPKI),
@@ -114,19 +124,7 @@ func writeWorkerConfig(node nodeInfo, m nodev1.MembershipSpec) error {
 	return nil
 }
 
-// workerPodCIDR gives each node its own pod range, picked from the node address
-// so it is stable without coordination: 10.244.<last octet>.0/24.
-func workerPodCIDR(node nodeInfo) string {
-	ip := node.ip.To4()
-	return fmt.Sprintf("10.244.%d.0/24", ip[3])
-}
-
-// podSubnetLabel publishes the node's pod subnet for the other nodes' routes.
-func podSubnetLabel(cidr string) string {
-	return "kuberoot.dev/pod-subnet=" + strings.Replace(cidr, "/", "-", 1)
-}
-
-func workerServices(node nodeInfo) []service {
+func workerServices(node nodeInfo, cn clusterNet) []service {
 	ip := node.ip.String()
 	return []service{
 		{name: "kuberoot-node", args: []string{"/usr/bin/kuberoot-node",
@@ -148,28 +146,35 @@ func workerServices(node nodeInfo) []service {
 			"--cert-dir=/var/lib/kubelet/pki",
 			"--hostname-override=" + node.name,
 			"--node-ip=" + ip,
-			"--node-labels=" + podSubnetLabel(workerPodCIDR(node)),
+			"--node-labels=" + podSubnetLabel(cn.nodeSubnet(node, false)),
 		}},
-		{name: "kube-proxy", args: []string{"/usr/bin/kube-proxy",
+		{name: "kube-proxy", after: kubeletCertIssued, args: []string{"/usr/bin/kube-proxy",
 			"--kubeconfig=" + kubeDir + "/kube-proxy.kubeconfig",
 			"--proxy-mode=nftables",
-			"--cluster-cidr=" + clusterCIDR,
+			"--cluster-cidr=" + cn.pod.String(),
 			"--hostname-override=" + node.name,
 		}},
 	}
 }
 
-func workerKubeletConfig(clientCA string) string {
-	cfg := fmt.Sprintf(kubeletConfig, clientCA, clusterDNS, "", "")
+// kubeletCertIssued: kube-proxy on a worker uses the kubelet's client
+// certificate, which exists only once the kubelet has bootstrapped.
+func kubeletCertIssued() bool {
+	_, err := os.Stat("/var/lib/kubelet/pki/kubelet-client-current.pem")
+	return err == nil
+}
+
+func workerKubeletConfig(clientCA string, cn clusterNet) string {
+	cfg := fmt.Sprintf(kubeletConfig, clientCA, cn.dnsIP(), "", "")
 	var kept []string
 	for _, line := range strings.Split(cfg, "\n") {
-		// No serving certificate files: the kubelet makes its own.
+		// No serving certificate files: the kubelet requests one from the cluster.
 		if strings.HasPrefix(line, "tlsCertFile:") || strings.HasPrefix(line, "tlsPrivateKeyFile:") {
 			continue
 		}
 		kept = append(kept, line)
 	}
-	return strings.Join(kept, "\n") + "rotateCertificates: true\n"
+	return strings.Join(kept, "\n") + "rotateCertificates: true\nserverTLSBootstrap: true\n"
 }
 
 const tokenKubeconfig = `apiVersion: v1

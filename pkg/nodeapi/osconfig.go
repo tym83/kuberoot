@@ -22,6 +22,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 
 	"github.com/tym83/kuberoot/pkg/apis/node"
+	"github.com/tym83/kuberoot/pkg/supervisor"
 )
 
 const osConfigState = "/var/lib/kuberoot/osconfig.json"
@@ -30,6 +31,7 @@ const osConfigState = "/var/lib/kuberoot/osconfig.json"
 // applied to the running system on every update.
 type osConfigStorage struct {
 	nodeName string
+	kinit    *supervisor.Client
 	mu       sync.Mutex
 	spec     node.OSConfigSpec
 }
@@ -44,8 +46,8 @@ var (
 	_ rest.Watcher              = &osConfigStorage{}
 )
 
-func newOSConfigStorage(nodeName string) *osConfigStorage {
-	s := &osConfigStorage{nodeName: nodeName}
+func newOSConfigStorage(nodeName string, kinit *supervisor.Client) *osConfigStorage {
+	s := &osConfigStorage{nodeName: nodeName, kinit: kinit}
 	if raw, err := os.ReadFile(osConfigState); err == nil {
 		_ = json.Unmarshal(raw, &s.spec)
 	}
@@ -94,7 +96,14 @@ func (s *osConfigStorage) Update(ctx context.Context, name string, objInfo rest.
 	s.mu.Unlock()
 	_ = os.MkdirAll(filepath.Dir(osConfigState), 0o755)
 	_ = os.WriteFile(osConfigState, raw, 0o600)
-	return s.current(), false, nil
+	obj := s.current()
+	if r := spec.RebootRequestedAt; r != nil && r.After(obj.Status.BootTime.Time) {
+		go func() {
+			time.Sleep(2 * time.Second) // answer the request first
+			_ = s.kinit.Reboot(context.Background())
+		}()
+	}
+	return obj, false, nil
 }
 
 // applyOSSpec makes the running system match the spec. Every sysctl is

@@ -745,6 +745,10 @@ func (in *OSConfigSpec) DeepCopyInto(out *OSConfigSpec) {
 			(*out)[key] = val
 		}
 	}
+	if in.RebootRequestedAt != nil {
+		in, out := &in.RebootRequestedAt, &out.RebootRequestedAt
+		*out = (*in).DeepCopy()
+	}
 	return
 }
 

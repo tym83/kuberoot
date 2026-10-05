@@ -11,12 +11,8 @@ import (
 )
 
 const (
-	kubeDir     = "/etc/kubernetes"
-	serviceCIDR = "10.96.0.0/12"
-	clusterCIDR = "10.244.0.0/16"
-	podCIDR     = "10.244.0.0/24"
-	clusterDNS  = "10.96.0.10"
-	apiServer   = "https://127.0.0.1:6443"
+	kubeDir   = "/etc/kubernetes"
+	apiServer = "https://127.0.0.1:6443"
 
 	nodeAPIServer       = "https://127.0.0.1:50000"
 	nodeAPIServiceDNS   = "kuberoot-node.kube-system.svc"
@@ -24,8 +20,8 @@ const (
 )
 
 // writeNodeConfig generates the PKI and every config file the node services read.
-func writeNodeConfig(node nodeInfo) error {
-	if err := createPKI(node); err != nil {
+func writeNodeConfig(node nodeInfo, cn clusterNet) error {
+	if err := createPKI(node, cn); err != nil {
 		return fmt.Errorf("pki: %w", err)
 	}
 	machineID, err := persistentMachineID()
@@ -35,8 +31,8 @@ func writeNodeConfig(node nodeInfo) error {
 	files := map[string]string{
 		"/etc/machine-id":                      machineID + "\n",
 		"/etc/containerd/config.toml":          containerdConfig,
-		"/etc/cni/net.d/10-kuberoot.conflist":  fmt.Sprintf(cniConfig, podCIDR),
-		filepath.Join(kubeDir, "kubelet.yaml"): fmt.Sprintf(kubeletConfig, pkiPath("ca.crt"), clusterDNS, pkiPath("kubelet-server.crt"), pkiPath("kubelet-server.key")),
+		"/etc/cni/net.d/10-kuberoot.conflist":  fmt.Sprintf(cniConfig, cn.nodeSubnet(node, true)),
+		filepath.Join(kubeDir, "kubelet.yaml"): fmt.Sprintf(kubeletConfig, pkiPath("ca.crt"), cn.dnsIP(), pkiPath("kubelet-server.crt"), pkiPath("kubelet-server.key")),
 	}
 	for _, user := range []string{"admin", "controller-manager", "scheduler", "kube-proxy", "kubelet-client", "node-api-delegation"} {
 		kc, err := kubeconfig(apiServer, "ca.crt", "kuberoot", user)

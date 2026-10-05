@@ -103,7 +103,7 @@ metadata:
   labels:
     k8s-app: kube-dns
 spec:
-  clusterIP: 10.96.0.10
+  clusterIP: __CLUSTER_DNS__
   selector:
     k8s-app: kube-dns
   ports:

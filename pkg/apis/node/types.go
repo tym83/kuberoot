@@ -20,6 +20,8 @@ type OSConfigSpec struct {
 	Nameservers []string `json:"nameservers,omitempty"`
 	// Sysctls are kernel parameters applied on top of the distro defaults.
 	Sysctls map[string]string `json:"sysctls,omitempty"`
+	// RebootRequestedAt reboots the node when set to a time after its last boot.
+	RebootRequestedAt *metav1.Time `json:"rebootRequestedAt,omitempty"`
 }
 
 type OSConfigStatus struct {
@@ -265,6 +267,9 @@ type MembershipSpec struct {
 	// cluster CA, the node API presents to the cluster.
 	NodeAPICert string `json:"nodeAPICert"`
 	NodeAPIKey  string `json:"nodeAPIKey"`
+	// PodCIDR and ServiceCIDR are the cluster's address ranges.
+	PodCIDR     string `json:"podCIDR,omitempty"`
+	ServiceCIDR string `json:"serviceCIDR,omitempty"`
 }
 
 type MembershipStatus struct {

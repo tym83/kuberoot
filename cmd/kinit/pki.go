@@ -35,7 +35,7 @@ type certSpec struct {
 
 // createPKI keeps the cluster CA and service account key across reboots and
 // reissues every leaf certificate, since the node address may have changed.
-func createPKI(node nodeInfo) error {
+func createPKI(node nodeInfo, cn clusterNet) error {
 	if err := os.MkdirAll(pkiDir, 0o700); err != nil {
 		return err
 	}
@@ -66,7 +66,7 @@ func createPKI(node nodeInfo) error {
 		{file: "apiserver", commonName: "kube-apiserver", usages: server,
 			dnsNames: []string{"kubernetes", "kubernetes.default", "kubernetes.default.svc",
 				"kubernetes.default.svc.cluster.local", "localhost", node.name},
-			ips: []net.IP{net.ParseIP("10.96.0.1"), net.ParseIP("127.0.0.1"), node.ip}},
+			ips: []net.IP{cn.apiServiceIP(), net.ParseIP("127.0.0.1"), node.ip}},
 		{file: "apiserver-kubelet-client", commonName: "kube-apiserver-kubelet-client", orgs: []string{"system:masters"}, usages: client},
 		{file: "admin", commonName: "kuberoot-admin", orgs: []string{"system:masters"}, usages: client},
 		{file: "controller-manager", commonName: "system:kube-controller-manager", usages: client},

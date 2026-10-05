@@ -15,6 +15,8 @@ type bootConfig struct {
 	nameservers []string
 	// install runs the console installer: the system booted from boot media.
 	install bool
+	// podCIDR and serviceCIDR set the address ranges of a cluster this node runs.
+	podCIDR, serviceCIDR string
 	// static is an interface with a fixed address, "eth1:192.168.100.11/24";
 	// that address becomes the node address in the cluster.
 	static string
@@ -37,6 +39,12 @@ func loadCmdline() bootConfig {
 			}
 			if v, ok := strings.CutPrefix(f, "kuberoot.ip="); ok {
 				cfg.static = v
+			}
+			if v, ok := strings.CutPrefix(f, "kuberoot.pod-cidr="); ok {
+				cfg.podCIDR = v
+			}
+			if v, ok := strings.CutPrefix(f, "kuberoot.service-cidr="); ok {
+				cfg.serviceCIDR = v
 			}
 		}
 	}

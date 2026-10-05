@@ -140,6 +140,18 @@ func (s *upgradeStorage) Create(_ context.Context, obj runtime.Object, _ rest.Va
 	if upgrade.CurrentSlot() == "" {
 		return nil, apierrors.NewBadRequest("not an installed system: install first")
 	}
+	// The inactive slot is the fallback while the running one is on probation;
+	// writing over it would leave nothing known-good to return to.
+	entries, err := upgrade.Entries()
+	if err != nil {
+		return nil, apierrors.NewServiceUnavailable(err.Error())
+	}
+	for _, e := range entries {
+		if e.Booted && e.State != upgrade.StateGood {
+			return nil, apierrors.NewConflict(node.Resource("upgrades"), u.Name,
+				fmt.Errorf("slot %s is still on probation; wait until it is Good before the next upgrade", e.Slot))
+		}
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.items == nil {

@@ -29,6 +29,8 @@ type ServiceStatus struct {
 const (
 	StateRunning    = "Running"
 	StateRestarting = "Restarting"
+	// StateWaiting: not started yet, waiting for what it depends on.
+	StateWaiting = "Waiting"
 )
 
 // Client talks to kinit over its socket.
