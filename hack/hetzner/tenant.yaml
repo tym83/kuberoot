@@ -9,5 +9,5 @@ spec:
   monitoring: false
   seaweedfs: false
   resourceQuotas:
-    cpu: "12"
-    memory: 24Gi
+    cpu: "80"
+    memory: 72Gi

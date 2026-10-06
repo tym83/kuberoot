@@ -1,45 +1,35 @@
 #!/usr/bin/env bash
-# Builds the kuberoot kernel inside the builder container.
-# Usage: scripts/build-kernel.sh <arch: arm64|amd64> [extra fragment...]
+# Builds the kuberoot kernel. Runs in the builder (hack/hetzner.sh), natively for
+# its architecture; sources and objects stay in $WORK between builds.
+# Usage: scripts/build-kernel.sh <arch: amd64|arm64> [extra fragment...]
 set -euo pipefail
 
 ARCH=${1:?arch required}
 shift
-KVER=$(cat kernel/VERSION)
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
+WORK=${WORK:-/work}
+OUT=${KUBEROOT_OUT:-$ROOT/out}/$ARCH
+KVER=$(cat "$ROOT/kernel/VERSION")
 
 case "$ARCH" in
-  arm64) KARCH=arm64; IMAGE=arch/arm64/boot/vmlinuz.efi; CROSS= ;;
-  amd64) KARCH=x86_64; IMAGE=arch/x86/boot/bzImage; CROSS=x86_64-linux-gnu- ;;
+  amd64) KARCH=x86_64; IMAGE=arch/x86/boot/bzImage ;;
+  arm64) KARCH=arm64; IMAGE=arch/arm64/boot/vmlinuz.efi ;;
   *) echo "unknown arch $ARCH" >&2; exit 1 ;;
 esac
 
-docker build -q -t kuberoot-builder -f "$ROOT/build/Dockerfile.builder" "$ROOT/build" >/dev/null
-mkdir -p "$ROOT/out/$ARCH"
-
-# Sources and objects live in a docker volume: the macOS bind mount is too slow for a kernel build.
-docker run --rm \
-  -v kuberoot-kernel:/work \
-  -v "$ROOT/kernel:/cfg:ro" \
-  -v "$ROOT/out/$ARCH:/out" \
-  -e KVER="$KVER" -e KARCH="$KARCH" -e IMAGE="$IMAGE" -e CROSS_COMPILE="$CROSS" \
-  -e FRAGMENTS="$ARCH.config $*" \
-  kuberoot-builder bash -euo pipefail -c '
-    cd /work
-    if [ ! -d "linux-$KVER" ]; then
-      curl -fsSL "https://cdn.kernel.org/pub/linux/kernel/v${KVER%%.*}.x/linux-$KVER.tar.xz" | tar -xJ
-    fi
-    cd "linux-$KVER"
-    O="/work/build-$KARCH"
-    make -s ARCH=$KARCH O=$O defconfig
-    frags=/cfg/base.config
-    for f in $FRAGMENTS; do [ -f "/cfg/$f" ] && frags="$frags /cfg/$f"; done
-    KCONFIG_CONFIG=$O/.config scripts/kconfig/merge_config.sh -m -O $O $O/.config $frags >/dev/null
-    make -s ARCH=$KARCH O=$O olddefconfig
-    make -s ARCH=$KARCH O=$O -j"$(nproc)" "$(basename $IMAGE)"
-    cp "$O/$IMAGE" /out/vmlinuz.efi
-    # Uncompressed image for direct QEMU boot during development.
-    [ -f "$O/arch/arm64/boot/Image" ] && cp "$O/arch/arm64/boot/Image" /out/kernel || cp "$O/$IMAGE" /out/kernel
-    cp "$O/.config" /out/kernel.config
-  '
-echo "kernel: out/$ARCH/kernel"
+mkdir -p "$WORK/src" "$OUT"
+cd "$WORK/src"
+if [ ! -d "linux-$KVER" ]; then
+  curl -fsSL "https://cdn.kernel.org/pub/linux/kernel/v${KVER%%.*}.x/linux-$KVER.tar.xz" | tar -xJ
+fi
+cd "linux-$KVER"
+O="$WORK/build-$KARCH"
+make -s ARCH=$KARCH O="$O" defconfig
+frags="$ROOT/kernel/base.config"
+for f in "$ARCH.config" "$@"; do [ -f "$ROOT/kernel/$f" ] && frags="$frags $ROOT/kernel/$f"; done
+KCONFIG_CONFIG="$O/.config" scripts/kconfig/merge_config.sh -m -O "$O" "$O/.config" $frags >/dev/null
+make -s ARCH=$KARCH O="$O" olddefconfig
+make -s ARCH=$KARCH O="$O" -j"$(nproc)" "$(basename $IMAGE)"
+cp "$O/$IMAGE" "$OUT/vmlinuz.efi"
+cp "$O/.config" "$OUT/kernel.config"
+echo "kernel: $OUT/vmlinuz.efi ($(du -h "$OUT/vmlinuz.efi" | cut -f1))"
