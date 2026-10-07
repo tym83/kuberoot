@@ -172,7 +172,9 @@ func Run(ctx context.Context, o Options) error {
 	go assessBoot(ctx, kinit, o.NodeName)
 	if o.RoutesKubeconfig != "" {
 		_, podRange, _ := net.ParseCIDR(o.PodCIDR)
-		go syncRoutes(ctx, o.RoutesKubeconfig, o.NodeName, podRange, o.PodNetwork)
+		if o.PodNetwork != PodNetworkNone {
+			go syncRoutes(ctx, o.RoutesKubeconfig, o.NodeName, podRange, o.PodNetwork)
+		}
 	}
 	return server.PrepareRun().RunWithContext(ctx)
 }

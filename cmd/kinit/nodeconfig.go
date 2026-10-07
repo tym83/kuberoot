@@ -83,11 +83,14 @@ state = "/run/containerd"
   address = "/run/containerd/containerd.sock"
 
 [plugins.'io.containerd.cri.v1.runtime'.cni]
-  bin_dirs = ["/usr/libexec/cni"]
+  # The built-in plugins, and a writable place for plugins a CNI package
+  # installs (Cilium's agent puts its plugin there).
+  bin_dirs = ["/usr/libexec/cni", "/var/lib/cni/bin"]
   conf_dir = "/etc/cni/net.d"
   # The kubelet passes the pod subnet the control plane assigned to this node;
   # containerd fills it into this template and writes the CNI configuration.
   conf_template = "/etc/cni/kuberoot.conflist.tmpl"
+
 
 [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runc]
   runtime_type = "io.containerd.runc.v2"
@@ -96,6 +99,14 @@ state = "/run/containerd"
   BinaryName = "/usr/bin/runc"
   SystemdCgroup = false
 `
+
+// cniTemplateLine is left out of the containerd configuration when a CNI
+// package provides the pod network.
+const cniTemplateLine = `  conf_template = "/etc/cni/kuberoot.conflist.tmpl"
+`
+
+// podNetworkMode is the boot's pod-network setting, for the generators.
+var podNetworkMode = "vxlan"
 
 const cniConfig = `{
   "cniVersion": "1.0.0",

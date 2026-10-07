@@ -97,14 +97,18 @@ var generators = map[string]func(roleContext) error{
 		})
 	},
 	// containers: containerd and the bridge CNI template, filled with the pod
-	// subnet the control plane assigns to this node.
+	// subnet the control plane assigns to this node. With pod-network=none a
+	// CNI package (Cilium) writes its own configuration instead.
 	"containers": func(r roleContext) error {
 		// A configuration left from a previous role or cluster has the wrong subnet.
 		_ = os.RemoveAll("/etc/cni/net.d")
-		return writeFiles(map[string]string{
-			"/etc/containerd/config.toml":     containerdConfig,
-			"/etc/cni/kuberoot.conflist.tmpl": strings.Replace(cniConfig, "__MTU__", strconv.Itoa(podMTU()), 1),
-		}, "/var/lib/containerd", "/etc/cni/net.d")
+		files := map[string]string{"/etc/containerd/config.toml": containerdConfig}
+		if podNetworkMode == "none" {
+			files["/etc/containerd/config.toml"] = strings.Replace(containerdConfig, cniTemplateLine, "", 1)
+		} else {
+			files["/etc/cni/kuberoot.conflist.tmpl"] = strings.Replace(cniConfig, "__MTU__", strconv.Itoa(podMTU()), 1)
+		}
+		return writeFiles(files, "/var/lib/containerd", "/etc/cni/net.d", "/var/lib/cni/bin")
 	},
 	// kubelet: its configuration, with serving certificates from the cluster CA
 	// on the control plane and requested through the CSR API on members.

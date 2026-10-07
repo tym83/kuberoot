@@ -26,6 +26,8 @@ const (
 	// encapsulation, but only on a plain layer-2 network that forwards
 	// packets addressed to pods.
 	PodNetworkHostGW = "host-gw"
+	// PodNetworkNone leaves pod traffic between nodes to a CNI package.
+	PodNetworkNone = "none"
 
 	vxlanDevice = "kuberoot.vx"
 	vxlanID     = 1

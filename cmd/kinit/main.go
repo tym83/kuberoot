@@ -52,6 +52,7 @@ func boot() error {
 
 	waitForEntropy()
 	cfg := loadCmdline()
+	podNetworkMode = cfg.podNetwork
 	activeProfile = loadProfileOrRescue()
 	if err := applySysctls(activeProfile.Spec.Sysctls); err != nil {
 		log.Printf("sysctls: %v", err)

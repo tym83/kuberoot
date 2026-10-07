@@ -9,6 +9,7 @@ func edgeFacts(plainHTTP bool) facts {
 	var f facts
 	f.Node.Name, f.Node.IP = "node-1", "192.168.100.11"
 	f.Net.Pod, f.Net.Service, f.Net.DNS = "10.200.0.0/16", "10.201.0.0/16", "10.201.0.10"
+	f.Net.PodNetwork = "vxlan"
 	f.Boot.Distro, f.Boot.RepoPlainHTTP = "edge", plainHTTP
 	return f
 }

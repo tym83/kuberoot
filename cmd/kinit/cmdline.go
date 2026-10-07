@@ -24,6 +24,10 @@ type bootConfig struct {
 	repoPlainHTTP bool
 	// podCIDR and serviceCIDR set the address ranges of a cluster this node runs.
 	podCIDR, serviceCIDR string
+	// podNetwork is how pod traffic crosses between nodes: vxlan (default),
+	// host-gw on a plain layer-2 network, or none when a CNI package such as
+	// Cilium takes the pod network over.
+	podNetwork string
 	// static is an interface with a fixed address, "eth1:192.168.100.11/24";
 	// that address becomes the node address in the cluster.
 	static string
@@ -68,10 +72,18 @@ func parseCmdline(cmdline string) bootConfig {
 			if v, ok := strings.CutPrefix(f, "kuberoot.service-cidr="); ok {
 				cfg.serviceCIDR = v
 			}
+			if v, ok := strings.CutPrefix(f, "kuberoot.pod-network="); ok {
+				cfg.podNetwork = v
+			}
 		}
 	}
 	if cfg.distro == "" {
 		cfg.distro = "edge"
+	}
+	switch cfg.podNetwork {
+	case "vxlan", "host-gw", "none":
+	default:
+		cfg.podNetwork = "vxlan"
 	}
 	if cfg.repo == "" {
 		cfg.repo = "https://tym83.github.io/kubepkg-recipes/index.yaml"

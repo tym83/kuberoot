@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestClusterNetDefaultsAndDerivedAddresses(t *testing.T) {
 	cn, err := parseClusterNet("", "")
@@ -37,5 +40,27 @@ func TestParseCmdline(t *testing.T) {
 	}
 	if def := parseCmdline(""); def.distro != "edge" || def.repo == "" {
 		t.Errorf("defaults = %+v", def)
+	}
+}
+
+func TestPodNetworkFromCmdline(t *testing.T) {
+	for in, want := range map[string]string{
+		"":                               "vxlan",
+		"kuberoot.pod-network=none":      "none",
+		"kuberoot.pod-network=host-gw":   "host-gw",
+		"kuberoot.pod-network=something": "vxlan",
+	} {
+		if got := parseCmdline(in).podNetwork; got != want {
+			t.Errorf("%q: pod network %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestNoPodNetworkLeavesTheCNITemplateOut(t *testing.T) {
+	if !strings.Contains(containerdConfig, cniTemplateLine) {
+		t.Fatal("the containerd configuration does not contain the CNI template line it is meant to drop")
+	}
+	if strings.Contains(strings.Replace(containerdConfig, cniTemplateLine, "", 1), "conf_template") {
+		t.Error("conf_template is still set with pod-network=none")
 	}
 }

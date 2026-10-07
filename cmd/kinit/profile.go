@@ -67,7 +67,7 @@ func loadProfileFile(path string) (*profile, error) { return distro.Load(path) }
 // facts are what service templates see.
 type facts struct {
 	Node struct{ Name, IP string }
-	Net  struct{ Pod, Service, DNS string }
+	Net  struct{ Pod, Service, DNS, PodNetwork string }
 	Boot struct {
 		Distro        string
 		RepoPlainHTTP bool
@@ -79,6 +79,7 @@ func roleFacts(r roleContext, cfg bootConfig) facts {
 	f.Node.Name, f.Node.IP = r.node.name, r.node.ip.String()
 	f.Net.Pod, f.Net.Service = r.net.pod.String(), r.net.service.String()
 	f.Net.DNS = r.net.dnsIP().String()
+	f.Net.PodNetwork = cfg.podNetwork
 	f.Boot.Distro, f.Boot.RepoPlainHTTP = cfg.distro, cfg.repoPlainHTTP
 	return f
 }

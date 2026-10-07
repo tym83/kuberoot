@@ -37,6 +37,7 @@ spec:
         - --proxy-client-key-file={{pki "node-api-proxy.key"}}
         - --routes-kubeconfig={{kube "admin.kubeconfig"}}
         - --pod-cidr={{.Net.Pod}}
+        - --pod-network={{.Net.PodNetwork}}
         - --service-cidr={{.Net.Service}}
       - name: containerd
         args: [/usr/bin/containerd, --config, /etc/containerd/config.toml]
@@ -159,6 +160,7 @@ spec:
         - --proxy-trust-ca-file={{cluster "ca.crt"}}
         - --routes-kubeconfig=/var/lib/kubelet/kubeconfig
         - --pod-cidr={{.Net.Pod}}
+        - --pod-network={{.Net.PodNetwork}}
       - name: containerd
         args: [/usr/bin/containerd, --config, /etc/containerd/config.toml]
       - name: kubelet
