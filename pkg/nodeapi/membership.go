@@ -180,6 +180,7 @@ type joinTicketStorage struct {
 	advertise   string
 	podCIDR     string
 	serviceCIDR string
+	podNetwork  string
 	mu          sync.Mutex
 	items       map[string]*node.JoinTicket
 }
@@ -231,6 +232,7 @@ func (s *joinTicketStorage) Create(ctx context.Context, obj runtime.Object, _ re
 			NodeAPICert:    string(certPEM),
 			NodeAPIKey:     string(keyPEM),
 			PodCIDR:        s.podCIDR,
+			PodNetwork:     s.podNetwork,
 			ServiceCIDR:    s.serviceCIDR,
 		},
 	}
@@ -366,5 +368,5 @@ func newJoinTickets(cluster kubernetes.Interface, o Options) (*joinTicketStorage
 	}
 	frontPEM, _ := readPEM(o.RequestHeaderCA)
 	return &joinTicketStorage{cluster: cluster, ca: ca, caPEM: caPEM, frontPEM: frontPEM, advertise: o.Advertise,
-		podCIDR: o.PodCIDR, serviceCIDR: o.ServiceCIDR}, nil
+		podCIDR: o.PodCIDR, serviceCIDR: o.ServiceCIDR, podNetwork: o.PodNetwork}, nil
 }

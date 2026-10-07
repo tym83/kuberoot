@@ -34,10 +34,17 @@ func configure(node nodeInfo, cfg bootConfig) ([]service, bool, error) {
 		}
 	} else {
 		log.Printf("joining %s as %s", m.Server, strings.ToLower(m.Role))
-		// A member takes the cluster's address ranges, whatever its own boot arguments say.
+		// A member takes the cluster's address ranges and pod network, whatever
+		// its own boot arguments say: a node with a pod network of its own
+		// would take the port of the cluster's tunnel and its routes.
 		if r.net, err = parseClusterNet(m.PodCIDR, m.ServiceCIDR); err != nil {
 			return nil, false, err
 		}
+		if m.PodNetwork != "" && m.PodNetwork != cfg.podNetwork {
+			log.Printf("pod network %s, as the cluster's (boot argument: %s)", m.PodNetwork, cfg.podNetwork)
+			cfg.podNetwork = m.PodNetwork
+		}
+		podNetworkMode = cfg.podNetwork
 		r.controlPlane, r.member, roleName = false, m, roleWorker
 	}
 	spec, ok := activeProfile.Spec.Roles[roleName]

@@ -1032,6 +1032,13 @@ func schema_pkg_apis_node_v1alpha1_MembershipSpec(ref common.ReferenceCallback) 
 							Format:      "",
 						},
 					},
+					"podNetwork": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PodNetwork is how the cluster carries pod traffic between nodes (vxlan, host-gw, or none when a CNI package does); every node of a cluster must use the same.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"serviceCIDR": {
 						SchemaProps: spec.SchemaProps{
 							Type:   []string{"string"},

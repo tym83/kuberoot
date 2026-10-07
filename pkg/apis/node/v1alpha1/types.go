@@ -268,7 +268,11 @@ type MembershipSpec struct {
 	NodeAPICert string `json:"nodeAPICert"`
 	NodeAPIKey  string `json:"nodeAPIKey"`
 	// PodCIDR and ServiceCIDR are the cluster's address ranges.
-	PodCIDR     string `json:"podCIDR,omitempty"`
+	PodCIDR string `json:"podCIDR,omitempty"`
+	// PodNetwork is how the cluster carries pod traffic between nodes
+	// (vxlan, host-gw, or none when a CNI package does); every node of a
+	// cluster must use the same.
+	PodNetwork  string `json:"podNetwork,omitempty"`
 	ServiceCIDR string `json:"serviceCIDR,omitempty"`
 }
 
