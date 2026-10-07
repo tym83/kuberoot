@@ -29,6 +29,7 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&Upgrade{}, &UpgradeList{},
 		&Membership{}, &MembershipList{},
 		&JoinTicket{}, &JoinTicketList{},
+		&StateBackup{}, &StateBackupList{},
 	)
 	return nil
 }

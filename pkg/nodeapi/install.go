@@ -2,7 +2,10 @@ package nodeapi
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -20,7 +23,9 @@ import (
 	"github.com/tym83/kuberoot/pkg/apis/node"
 	"github.com/tym83/kuberoot/pkg/bootdisk"
 	"github.com/tym83/kuberoot/pkg/installer"
+	"github.com/tym83/kuberoot/pkg/release"
 	"github.com/tym83/kuberoot/pkg/supervisor"
+	"github.com/tym83/kuberoot/pkg/upgrade"
 )
 
 // diskStorage lists the block devices of the node.
@@ -109,6 +114,11 @@ func (s *installationStorage) Create(_ context.Context, obj runtime.Object, vali
 	if inst.Spec.Disk == "" {
 		return nil, apierrors.NewBadRequest("spec.disk is required")
 	}
+	if r := inst.Spec.Restore; r != nil {
+		if sum, err := hex.DecodeString(r.Sha256); r.URL == "" || err != nil || len(sum) != sha256.Size {
+			return nil, apierrors.NewBadRequest("spec.restore needs url and the archive's sha256")
+		}
+	}
 	artifacts, err := installer.FromMedia()
 	if err != nil {
 		return nil, apierrors.NewBadRequest(err.Error())
@@ -144,7 +154,15 @@ func (s *installationStorage) run(name string, spec node.InstallationSpec, a boo
 		st.Phase, st.Message, st.Progress = phase, message, int32(progress)
 		s.items[name].ResourceVersion = resourceVersion(*st)
 	}
-	err := installer.Install(context.Background(), spec.Disk, a, update)
+	var err error
+	restore := ""
+	if spec.Restore != nil {
+		restore, err = fetchStateArchive(spec.Restore, update)
+		defer os.Remove(restore)
+	}
+	if err == nil {
+		err = installer.Install(context.Background(), spec.Disk, a, restore, update)
+	}
 	now := metav1.Now()
 	s.mu.Lock()
 	st := &s.items[name].Status
@@ -208,4 +226,24 @@ func (s *installationStorage) ConvertToTable(_ context.Context, obj runtime.Obje
 			i := o.(*node.Installation)
 			return []any{i.Name, i.Spec.Disk, i.Status.Phase, fmt.Sprintf("%d%%", i.Status.Progress), i.Status.Message}
 		}), nil
+}
+
+// fetchStateArchive downloads the state archive to restore and checks it is
+// the one asked for: it holds the cluster's certificate authorities.
+func fetchStateArchive(r *node.InstallationRestore, update func(phase, message string, progress int)) (string, error) {
+	path := "/run/kuberoot/restore.tar.gz"
+	update(installer.PhasePending, "downloading the state archive", 1)
+	if err := upgrade.Download(context.Background(), r.URL, path, func(done, _ int64) {
+		update(installer.PhasePending, fmt.Sprintf("downloading the state archive: %d MiB", done>>20), 2)
+	}); err != nil {
+		return path, fmt.Errorf("state archive: %w", err)
+	}
+	sum, err := release.FileSum(path)
+	if err != nil {
+		return path, err
+	}
+	if !strings.EqualFold(hex.EncodeToString(sum), r.Sha256) {
+		return path, fmt.Errorf("state archive: sha256 %x is not the one given", sum)
+	}
+	return path, nil
 }

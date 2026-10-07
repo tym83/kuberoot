@@ -31,6 +31,7 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&Upgrade{}, &UpgradeList{},
 		&Membership{}, &MembershipList{},
 		&JoinTicket{}, &JoinTicketList{},
+		&StateBackup{}, &StateBackupList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil

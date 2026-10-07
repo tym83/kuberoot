@@ -160,6 +160,10 @@ func Run(ctx context.Context, o Options) error {
 			}
 		}
 		go approveKubeletServing(ctx, admin, reserved)
+		// The control plane backs its state up; members hold none of their own.
+		backups := newStateBackups(o.NodeName, admin)
+		resources["statebackups"] = backups
+		go backups.run(ctx)
 	}
 	for name, st := range storages {
 		resources[name] = st

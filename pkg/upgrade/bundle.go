@@ -37,7 +37,7 @@ func Fetch(ctx context.Context, url, sum string, report func(done, total int64))
 		return a, fmt.Errorf("release keys: %w", err)
 	}
 	bundle := filepath.Join(downloadDir, "bundle.tar")
-	if err := download(ctx, url, bundle, report); err != nil {
+	if err := Download(ctx, url, bundle, report); err != nil {
 		return a, err
 	}
 	defer os.Remove(bundle)
@@ -68,7 +68,8 @@ var client = &http.Client{Timeout: 30 * time.Minute, Transport: &http.Transport{
 	ResponseHeaderTimeout: time.Minute, IdleConnTimeout: time.Minute,
 }}
 
-func download(ctx context.Context, url, path string, report func(done, total int64)) error {
+// Download fetches url into path, reporting progress.
+func Download(ctx context.Context, url, path string, report func(done, total int64)) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err

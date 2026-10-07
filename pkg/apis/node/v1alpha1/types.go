@@ -151,6 +151,18 @@ type InstallationSpec struct {
 	Disk string `json:"disk"`
 	// Reboot into the installed system when done.
 	Reboot bool `json:"reboot,omitempty"`
+	// Restore installs the state of a control plane from one of its state
+	// backups instead of this node's own: the node comes back as that
+	// control plane, with its identity, certificates and cluster store.
+	Restore *InstallationRestore `json:"restore,omitempty"`
+}
+
+type InstallationRestore struct {
+	// URL of the state archive, such as a presigned link to object storage.
+	URL string `json:"url"`
+	// SHA256 of the archive, as its StateBackup reports it. Required: the
+	// archive holds the cluster's certificate authorities.
+	Sha256 string `json:"sha256"`
 }
 
 type InstallationStatus struct {
@@ -321,4 +333,37 @@ type JoinTicketList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 
 	Items []JoinTicket `json:"items"`
+}
+
+// StateBackup is an archive of a control plane's state: its identity and
+// certificates, the kubelet's credentials and a consistent snapshot of the
+// cluster store. The node takes one on a schedule and on request (create
+// one), keeps the latest locally and uploads them to object storage when
+// kube-system/kuberoot-state-backup says where. Installation.spec.restore
+// brings a control plane back from one.
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +genclient:nonNamespaced
+type StateBackup struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Status StateBackupStatus `json:"status,omitempty"`
+}
+
+type StateBackupStatus struct {
+	CreatedAt metav1.Time `json:"createdAt"`
+	SizeBytes int64       `json:"sizeBytes"`
+	Sha256    string      `json:"sha256"`
+	// Location in object storage once uploaded.
+	Location string `json:"location,omitempty"`
+	// Message says why the last upload failed.
+	Message string `json:"message,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type StateBackupList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []StateBackup `json:"items"`
 }

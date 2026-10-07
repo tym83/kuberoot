@@ -48,8 +48,10 @@ func FromMedia() (bootdisk.Artifacts, error) {
 	return a, nil
 }
 
-// Install erases the disk and writes slot A, the bootloader and an empty state partition.
-func Install(ctx context.Context, diskName string, a bootdisk.Artifacts, progress Progress) error {
+// Install erases the disk and writes slot A, the bootloader and the state
+// partition. The state is the running node's own, or, with restore set to a
+// state archive, the one the archive was taken from.
+func Install(ctx context.Context, diskName string, a bootdisk.Artifacts, restore string, progress Progress) error {
 	target, err := checkTarget(diskName)
 	if err != nil {
 		return err
@@ -71,8 +73,12 @@ func Install(ctx context.Context, diskName string, a bootdisk.Artifacts, progres
 	if out, err := exec.CommandContext(ctx, "mkfs.ext4", "-q", "-F", "-L", bootdisk.StateLabel, state).CombinedOutput(); err != nil {
 		return fmt.Errorf("mkfs.ext4 %s: %v: %s", state, err, out)
 	}
+	if restore != "" {
+		progress(PhaseFormatting, "restoring the state from the backup", 95)
+		return onState(state, func(mnt string) error { return extractState(restore, mnt) })
+	}
 	progress(PhaseFormatting, "carrying the node identity over", 95)
-	return carryIdentity(state)
+	return onState(state, carryIdentity)
 }
 
 // carriedState is what an installed node keeps from the system it was
@@ -87,16 +93,14 @@ var carriedState = []string{
 
 // notCarried are paths below the carried state that stay behind: upgrade
 // bundles downloaded by the live system, as large as a root filesystem.
-var notCarried = []string{"lib/kuberoot/upgrade"}
+var notCarried = []string{"lib/kuberoot/upgrade", "lib/kuberoot/backups"}
 
 // kineStore is the control plane's cluster store. It is written all the
 // time, so it is carried as a consistent snapshot, not copied file by file.
 const kineStore = "lib/kine/state.db"
 
-// carryIdentity copies the node's identity, membership and store onto the new
-// state partition: the installed system is the same node the admin already
-// talks to, and credentials issued by the live system keep working.
-func carryIdentity(stateDev string) error {
+// onState runs fn on the new state partition, mounted, and syncs it.
+func onState(stateDev string, fn func(mnt string) error) error {
 	const mnt = "/run/kuberoot/target-state"
 	if err := os.MkdirAll(mnt, 0o755); err != nil {
 		return err
@@ -105,6 +109,17 @@ func carryIdentity(stateDev string) error {
 		return fmt.Errorf("mount new state: %w", err)
 	}
 	defer unix.Unmount(mnt, 0)
+	if err := fn(mnt); err != nil {
+		return err
+	}
+	unix.Sync()
+	return nil
+}
+
+// carryIdentity copies the node's identity, membership and store onto the new
+// state partition: the installed system is the same node the admin already
+// talks to, and credentials issued by the live system keep working.
+func carryIdentity(mnt string) error {
 	for _, rel := range carriedState {
 		src := filepath.Join("/var", rel)
 		if _, err := os.Stat(src); errors.Is(err, os.ErrNotExist) {
@@ -117,7 +132,6 @@ func carryIdentity(stateDev string) error {
 	if err := snapshotStore(filepath.Join("/var", kineStore), filepath.Join(mnt, kineStore)); err != nil {
 		return fmt.Errorf("carry the cluster store: %w", err)
 	}
-	unix.Sync()
 	return nil
 }
 
