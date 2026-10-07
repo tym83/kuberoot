@@ -75,9 +75,6 @@ func Install(ctx context.Context, diskName string, a bootdisk.Artifacts, progres
 	return carryIdentity(state)
 }
 
-// carryIdentity copies the node's CAs, keys and machine ID onto the new state
-// partition: the installed system is the same node the admin already talks to,
-// and credentials issued by the live system keep working.
 // carriedState is what an installed node keeps from the system it was
 // installed from: its identity and certificates, its membership of a cluster,
 // the cluster's store on a control plane, and the kubelet's client
@@ -88,10 +85,17 @@ var carriedState = []string{
 	"lib/kubelet/pki", // the kubelet's client certificate
 }
 
+// notCarried are paths below the carried state that stay behind: upgrade
+// bundles downloaded by the live system, as large as a root filesystem.
+var notCarried = []string{"lib/kuberoot/upgrade"}
+
 // kineStore is the control plane's cluster store. It is written all the
 // time, so it is carried as a consistent snapshot, not copied file by file.
 const kineStore = "lib/kine/state.db"
 
+// carryIdentity copies the node's identity, membership and store onto the new
+// state partition: the installed system is the same node the admin already
+// talks to, and credentials issued by the live system keep working.
 func carryIdentity(stateDev string) error {
 	const mnt = "/run/kuberoot/target-state"
 	if err := os.MkdirAll(mnt, 0o755); err != nil {
@@ -141,8 +145,28 @@ func copyTree(src, dst string) error {
 			return err
 		}
 		target := filepath.Join(dst, strings.TrimPrefix(path, src))
-		if info.IsDir() {
+		for _, skip := range notCarried {
+			if strings.HasSuffix(path, "/"+skip) && info.IsDir() {
+				return filepath.SkipDir
+			}
+		}
+		switch {
+		case info.IsDir():
 			return os.MkdirAll(target, info.Mode().Perm())
+		case info.Mode()&os.ModeSymlink != 0:
+			// The kubelet keeps its current certificates as symlinks and
+			// rotates them by moving the link; a plain file breaks rotation.
+			link, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return err
+			}
+			_ = os.Remove(target)
+			return os.Symlink(link, target)
+		case !info.Mode().IsRegular():
+			return nil // sockets, fifos: runtime state
 		}
 		raw, err := os.ReadFile(path)
 		if err != nil {

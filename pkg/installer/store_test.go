@@ -2,6 +2,7 @@ package installer
 
 import (
 	"database/sql"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -36,5 +37,29 @@ func TestSnapshotStoreCopiesALiveDatabase(t *testing.T) {
 func TestSnapshotStoreSkipsAMissingStore(t *testing.T) {
 	if err := snapshotStore(filepath.Join(t.TempDir(), "none.db"), filepath.Join(t.TempDir(), "x.db")); err != nil {
 		t.Errorf("worker without a store: %v", err)
+	}
+}
+
+func TestCopyTreeKeepsSymlinksAndSkipsUpgrades(t *testing.T) {
+	src, dst := t.TempDir(), t.TempDir()
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	must(os.MkdirAll(filepath.Join(src, "lib/kuberoot/upgrade"), 0o755))
+	must(os.WriteFile(filepath.Join(src, "lib/kuberoot/upgrade/bundle.tar"), []byte("big"), 0o600))
+	must(os.MkdirAll(filepath.Join(src, "lib/kubelet/pki"), 0o755))
+	must(os.WriteFile(filepath.Join(src, "lib/kubelet/pki/kubelet-client-2026.pem"), []byte("cert"), 0o600))
+	must(os.Symlink("kubelet-client-2026.pem", filepath.Join(src, "lib/kubelet/pki/kubelet-client-current.pem")))
+	for _, rel := range []string{"lib/kuberoot", "lib/kubelet/pki"} {
+		must(copyTree(filepath.Join(src, rel), filepath.Join(dst, rel)))
+	}
+	if link, err := os.Readlink(filepath.Join(dst, "lib/kubelet/pki/kubelet-client-current.pem")); err != nil || link != "kubelet-client-2026.pem" {
+		t.Errorf("current certificate is not the symlink it was: %q %v", link, err)
+	}
+	if _, err := os.Stat(filepath.Join(dst, "lib/kuberoot/upgrade")); !os.IsNotExist(err) {
+		t.Errorf("upgrade bundles were carried: %v", err)
 	}
 }
