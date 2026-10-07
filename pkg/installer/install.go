@@ -2,6 +2,8 @@ package installer
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -14,6 +16,7 @@ import (
 	"github.com/diskfs/go-diskfs/disk"
 	"github.com/diskfs/go-diskfs/filesystem"
 	"golang.org/x/sys/unix"
+	_ "modernc.org/sqlite"
 
 	"github.com/tym83/kuberoot/pkg/bootdisk"
 )
@@ -75,6 +78,20 @@ func Install(ctx context.Context, diskName string, a bootdisk.Artifacts, progres
 // carryIdentity copies the node's CAs, keys and machine ID onto the new state
 // partition: the installed system is the same node the admin already talks to,
 // and credentials issued by the live system keep working.
+// carriedState is what an installed node keeps from the system it was
+// installed from: its identity and certificates, its membership of a cluster,
+// the cluster's store on a control plane, and the kubelet's client
+// certificate. Without them a worker comes back as a cluster of its own and a
+// control plane comes back empty.
+var carriedState = []string{
+	"lib/kuberoot",    // PKI, machine-id, cluster membership
+	"lib/kubelet/pki", // the kubelet's client certificate
+}
+
+// kineStore is the control plane's cluster store. It is written all the
+// time, so it is carried as a consistent snapshot, not copied file by file.
+const kineStore = "lib/kine/state.db"
+
 func carryIdentity(stateDev string) error {
 	const mnt = "/run/kuberoot/target-state"
 	if err := os.MkdirAll(mnt, 0o755); err != nil {
@@ -84,13 +101,38 @@ func carryIdentity(stateDev string) error {
 		return fmt.Errorf("mount new state: %w", err)
 	}
 	defer unix.Unmount(mnt, 0)
-	for _, rel := range []string{"lib/kuberoot/pki", "lib/kuberoot/machine-id"} {
-		if err := copyTree(filepath.Join("/var", rel), filepath.Join(mnt, rel)); err != nil {
+	for _, rel := range carriedState {
+		src := filepath.Join("/var", rel)
+		if _, err := os.Stat(src); errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err := copyTree(src, filepath.Join(mnt, rel)); err != nil {
 			return fmt.Errorf("copy %s: %w", rel, err)
 		}
 	}
+	if err := snapshotStore(filepath.Join("/var", kineStore), filepath.Join(mnt, kineStore)); err != nil {
+		return fmt.Errorf("carry the cluster store: %w", err)
+	}
 	unix.Sync()
 	return nil
+}
+
+// snapshotStore writes a consistent copy of a live SQLite database: VACUUM
+// INTO reads it under SQLite's own locking while kine keeps writing.
+func snapshotStore(src, dst string) error {
+	if _, err := os.Stat(src); errors.Is(err, os.ErrNotExist) {
+		return nil // a worker has no store
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
+		return err
+	}
+	db, err := sql.Open("sqlite", "file:"+src+"?mode=ro&_pragma=busy_timeout(10000)")
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	_, err = db.Exec("VACUUM INTO ?", dst)
+	return err
 }
 
 func copyTree(src, dst string) error {
