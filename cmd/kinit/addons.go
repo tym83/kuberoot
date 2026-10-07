@@ -52,8 +52,44 @@ func writeAggregation(node nodeInfo) error {
 		return err
 	}
 	manifest := fmt.Sprintf(aggregationTemplate, node.name, node.ip, node.name, base64.StdEncoding.EncodeToString(ca))
-	return os.WriteFile(generatedAddonsDir+"/node-api.yaml", []byte(manifest), 0o644)
+	if err := os.WriteFile(generatedAddonsDir+"/node-api.yaml", []byte(manifest), 0o644); err != nil {
+		return err
+	}
+	// The package manager's image policy webhook runs in the same way, in the
+	// operator on this node.
+	webhook := fmt.Sprintf(imagePolicyEndpointTemplate, node.name, node.ip, node.name)
+	return os.WriteFile(generatedAddonsDir+"/kubepkg-webhook.yaml", []byte(webhook), 0o644)
 }
+
+const imagePolicyEndpointTemplate = `apiVersion: v1
+kind: Service
+metadata:
+  name: kubepkg-webhook
+  namespace: kube-system
+spec:
+  ports:
+  - name: webhook
+    port: 443
+    targetPort: 9443
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: kubepkg-webhook-%s
+  namespace: kube-system
+  labels:
+    kubernetes.io/service-name: kubepkg-webhook
+addressType: IPv4
+ports:
+- name: webhook
+  port: 9443
+  protocol: TCP
+endpoints:
+- addresses: ["%s"]
+  nodeName: %s
+  conditions:
+    ready: true
+`
 
 const aggregationTemplate = `apiVersion: v1
 kind: Service
