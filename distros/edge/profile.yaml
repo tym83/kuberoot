@@ -146,6 +146,8 @@ spec:
         - /usr/bin/kubepkg-operator
         - --backend=helm
         - --cache-dir=/var/lib/kubepkg/cache
+        # What kuberoot nodes are like, for packages that need to know.
+        - --values-secret=kube-system/kuberoot-platform-values
         - --metrics-bind-address=0
         - --health-probe-bind-address=0
         - '{{if .Boot.RepoPlainHTTP}}--plain-http{{end}}'
