@@ -136,3 +136,27 @@ func TestStagingRetiresTheOldEntryAndAddsOneOnProbation(t *testing.T) {
 		t.Errorf("new entry = %+v; want kuberoot-b+3.conf, version 5, Trying, 0.1.2", e)
 	}
 }
+
+func TestTheLastAttemptIsStillOnProbation(t *testing.T) {
+	dir := t.TempDir()
+	writeEntry(t, dir, "kuberoot-a.conf", "0.1.0", "1")
+	writeEntry(t, dir, "kuberoot-b+0-3.conf", "0.1.1", "2") // booted on its last attempt
+	entries, _ := readEntriesIn(dir, "b")
+	if on, fallback := Probation(entries); !on || !fallback {
+		t.Errorf("Probation = %v, %v; want on probation with slot a to fall back to", on, fallback)
+	}
+	entries, _ = readEntriesIn(dir, "a")
+	if on, _ := Probation(entries); on {
+		t.Error("a good running slot is not on probation")
+	}
+}
+
+func TestNoFallbackWithoutAnotherGoodSlot(t *testing.T) {
+	dir := t.TempDir()
+	writeEntry(t, dir, "kuberoot-a+0-3.conf", "0.1.0", "1")
+	writeEntry(t, dir, "kuberoot-b+0-3.conf", "0.1.1", "2")
+	entries, _ := readEntriesIn(dir, "b")
+	if on, fallback := Probation(entries); !on || fallback {
+		t.Errorf("Probation = %v, %v; want on probation, nothing to fall back to", on, fallback)
+	}
+}

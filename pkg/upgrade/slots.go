@@ -234,6 +234,22 @@ func addProbationEntry(dir string, entry bootdisk.Entry, current string) error {
 	return atomicfile.WriteFile(filepath.Join(dir, name), []byte(entry.String()), 0o644)
 }
 
+// Probation reports whether the running slot is on probation and whether
+// another slot that came up healthy before can take over should it fail. The
+// running slot is on probation while it carries a boot counter: Trying, or
+// Bad when systemd-boot has just spent its last attempt on it.
+func Probation(entries []Entry) (onProbation, fallback bool) {
+	for _, e := range entries {
+		if e.Booted && e.State != StateGood {
+			onProbation = true
+		}
+		if !e.Booted && e.State == StateGood {
+			fallback = true
+		}
+	}
+	return onProbation, fallback
+}
+
 // MarkGood ends the probation of the running slot by dropping its boot counter.
 func MarkGood() (bool, error) {
 	var marked bool

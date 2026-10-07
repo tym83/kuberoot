@@ -280,12 +280,7 @@ func assessBoot(ctx context.Context, kinit *supervisor.Client, nodeName string) 
 		klog.Errorf("boot assessment: %v", err)
 		return
 	}
-	onProbation := false
-	for _, e := range entries {
-		if e.Booted && e.State == upgrade.StateTrying {
-			onProbation = true
-		}
-	}
+	onProbation, fallback := upgrade.Probation(entries)
 	if !onProbation {
 		return
 	}
@@ -316,6 +311,11 @@ func assessBoot(ctx context.Context, kinit *supervisor.Client, nodeName string) 
 			klog.Infof("boot assessment: slot %s is good", upgrade.CurrentSlot())
 			return
 		}
+	}
+	if !fallback {
+		// Rebooting would only boot this slot again.
+		klog.Errorf("boot assessment: slot %s did not come up healthy and no other slot ever did; staying", upgrade.CurrentSlot())
+		return
 	}
 	klog.Errorf("boot assessment: slot %s did not come up healthy, rebooting", upgrade.CurrentSlot())
 	_ = kinit.Reboot(ctx)
