@@ -41,6 +41,12 @@ func mountAll() error {
 			return fmt.Errorf("mount %s: %w", m.target, err)
 		}
 	}
+	// Mounts propagate both ways, as under systemd: the kubelet and the
+	// runtime need shared mounts for Bidirectional volume mounts (CSI
+	// drivers, virt-handler), and refuse them below a private mount.
+	if err := unix.Mount("", "/", "", unix.MS_REC|unix.MS_SHARED, ""); err != nil {
+		return fmt.Errorf("make mounts shared: %w", err)
+	}
 	return nil
 }
 
