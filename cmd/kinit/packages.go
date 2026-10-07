@@ -68,7 +68,7 @@ func installDistro(ctx context.Context, cfg bootConfig) {
 	}
 }
 
-const packagesTemplate = `apiVersion: kubepkg.dev/v1beta1
+const packagesTemplate = `apiVersion: kubepkg.dev/v1
 kind: Repository
 metadata:
   name: main
@@ -77,7 +77,7 @@ spec:
   publicKeys:
     - |
 %s---
-apiVersion: kubepkg.dev/v1beta1
+apiVersion: kubepkg.dev/v1
 kind: Package
 metadata:
   name: coredns
