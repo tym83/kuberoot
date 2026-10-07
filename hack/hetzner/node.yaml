@@ -37,7 +37,7 @@ spec:
   resources:
     cpu: 4
     sockets: 1
-    memory: 6Gi
+    memory: 8Gi
   external: true
   externalMethod: PortList
   externalAllowICMP: true

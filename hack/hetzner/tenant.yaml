@@ -10,4 +10,4 @@ spec:
   seaweedfs: false
   resourceQuotas:
     cpu: "80"
-    memory: 72Gi
+    memory: 100Gi

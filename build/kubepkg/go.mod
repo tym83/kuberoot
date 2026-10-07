@@ -4,7 +4,7 @@ module github.com/tym83/kuberoot/build/kubepkg
 
 go 1.26.5
 
-require github.com/tym83/kubepkg v0.1.0
+require github.com/tym83/kubepkg v0.3.2
 
 require (
 	dario.cat/mergo v1.0.1 // indirect
@@ -24,6 +24,7 @@ require (
 	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/cyphar/filepath-securejoin v0.7.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
+	github.com/distribution/reference v0.6.0 // indirect
 	github.com/dylibso/observe-sdk/go v0.0.0-20240819160327-2d926c5d788a // indirect
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
