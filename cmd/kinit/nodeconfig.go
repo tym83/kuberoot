@@ -108,6 +108,7 @@ const cniConfig = `{
       "ipMasq": true,
       "ipMasqBackend": "nftables",
       "hairpinMode": true,
+      "mtu": __MTU__,
       "ipam": {
         "type": "host-local",
         "ranges": [[{"subnet": "{{.PodCIDR}}"}]],

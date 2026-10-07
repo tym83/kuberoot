@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/tym83/kuberoot/pkg/atomicfile"
+	"github.com/vishvananda/netlink"
 
 	nodev1 "github.com/tym83/kuberoot/pkg/apis/node/v1alpha1"
 )
@@ -101,7 +103,7 @@ var generators = map[string]func(roleContext) error{
 		_ = os.RemoveAll("/etc/cni/net.d")
 		return writeFiles(map[string]string{
 			"/etc/containerd/config.toml":     containerdConfig,
-			"/etc/cni/kuberoot.conflist.tmpl": cniConfig,
+			"/etc/cni/kuberoot.conflist.tmpl": strings.Replace(cniConfig, "__MTU__", strconv.Itoa(podMTU()), 1),
 		}, "/var/lib/containerd", "/etc/cni/net.d")
 	},
 	// kubelet: its configuration, with serving certificates from the cluster CA
@@ -114,6 +116,27 @@ var generators = map[string]func(roleContext) error{
 		return writeFiles(map[string]string{filepath.Join(kubeDir, "kubelet.yaml"): cfg}, "/var/lib/kubelet")
 	},
 }
+
+// podMTU leaves room in the node's MTU for the VXLAN header pod traffic
+// between nodes is carried in.
+func podMTU() int {
+	mtu := 1500
+	if routes, err := netlink.RouteList(nil, netlink.FAMILY_V4); err == nil {
+		for _, r := range routes {
+			if r.Dst == nil || r.Dst.IP.IsUnspecified() {
+				if l, err := netlink.LinkByIndex(r.LinkIndex); err == nil && l.Attrs().MTU > 0 {
+					mtu = l.Attrs().MTU
+					break
+				}
+			}
+		}
+	}
+	return mtu - vxlanOverhead
+}
+
+// vxlanOverhead matches nodeapi.VXLANOverhead; kinit does not import the
+// node API server for one number.
+const vxlanOverhead = 50
 
 // encryptionKey is the key Secrets are encrypted with in the store, made once
 // and kept with the cluster's PKI.

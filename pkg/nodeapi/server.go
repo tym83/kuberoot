@@ -66,7 +66,10 @@ type Options struct {
 	ProxyTrustCA string
 
 	// PodCIDR and ServiceCIDR of the cluster, handed to joining nodes.
-	PodCIDR     string
+	PodCIDR string
+	// PodNetwork is how pod traffic crosses between nodes: PodNetworkVXLAN
+	// or PodNetworkHostGW.
+	PodNetwork  string
 	ServiceCIDR string
 
 	// Resources the distribution serves; empty serves all.
@@ -169,7 +172,7 @@ func Run(ctx context.Context, o Options) error {
 	go assessBoot(ctx, kinit, o.NodeName)
 	if o.RoutesKubeconfig != "" {
 		_, podRange, _ := net.ParseCIDR(o.PodCIDR)
-		go syncRoutes(ctx, o.RoutesKubeconfig, o.NodeName, podRange)
+		go syncRoutes(ctx, o.RoutesKubeconfig, o.NodeName, podRange, o.PodNetwork)
 	}
 	return server.PrepareRun().RunWithContext(ctx)
 }

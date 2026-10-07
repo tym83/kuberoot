@@ -27,8 +27,27 @@ func TestDesiredRoutesTrustOnlyAssignedSubnetsInsideThePodRange(t *testing.T) {
 		testNode("dup-b", "10.200.5.0/24", "192.168.100.16"), // the same subnet twice
 		testNode("unassigned", "", "192.168.100.17"),
 	}
-	got := desiredRoutes(nodes, "self", podRange)
-	if len(got) != 1 || !got["10.200.1.0/24"].Equal(net.ParseIP("192.168.100.12")) {
-		t.Errorf("routes = %v; want only 10.200.1.0/24 via 192.168.100.12", got)
+	own, got := desiredPeers(nodes, "self", podRange)
+	if len(got) != 1 || !got["10.200.1.0/24"].node.Equal(net.ParseIP("192.168.100.12")) {
+		t.Errorf("peers = %v; want only 10.200.1.0/24 at 192.168.100.12", got)
+	}
+	if own == nil || own.subnet.String() != "10.200.0.0/24" || !own.node.Equal(net.ParseIP("192.168.100.11")) {
+		t.Errorf("own = %v; want 10.200.0.0/24 at 192.168.100.11", own)
+	}
+}
+
+func TestVTEPIsDerivedFromTheSubnet(t *testing.T) {
+	_, a, _ := net.ParseCIDR("10.200.3.0/24")
+	_, b, _ := net.ParseCIDR("10.200.4.0/24")
+	ipA, macA := vtep(a)
+	ipB, macB := vtep(b)
+	if !ipA.Equal(net.ParseIP("10.200.3.0")) || macA.String() != "0e:6b:0a:c8:03:00" {
+		t.Errorf("vtep(10.200.3.0/24) = %s %s", ipA, macA)
+	}
+	if ipA.Equal(ipB) || macA.String() == macB.String() {
+		t.Errorf("different subnets share an endpoint: %s %s", macA, macB)
+	}
+	if macA[0]&1 != 0 || macA[0]&2 == 0 {
+		t.Errorf("%s is not a locally administered unicast MAC", macA)
 	}
 }
