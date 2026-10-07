@@ -15,8 +15,9 @@ webhooks:
     namespaceSelector:
       matchExpressions:
         - {key: kubepkg.dev/image-policy, operator: In, values: [warn, enforce]}
-    # warn never stands in the way of a pod.
-    failurePolicy: Ignore
+    # enforce: no pod there starts without the webhook's say. The operator
+    # runs on the control plane node, as the API server does.
+    failurePolicy: Fail
     sideEffects: None
     admissionReviewVersions: [v1]
     timeoutSeconds: 10
