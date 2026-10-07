@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -106,7 +107,7 @@ var generators = map[string]func(roleContext) error{
 		if podNetworkMode == "none" {
 			files["/etc/containerd/config.toml"] = strings.Replace(containerdConfig, cniTemplateLine, "", 1)
 		} else {
-			files["/etc/cni/kuberoot.conflist.tmpl"] = strings.Replace(cniConfig, "__MTU__", strconv.Itoa(podMTU()), 1)
+			files["/etc/cni/kuberoot.conflist.tmpl"] = strings.Replace(cniConfig, "__MTU__", strconv.Itoa(podMTU(r.node.ip)), 1)
 		}
 		return writeFiles(files, "/var/lib/containerd", "/etc/cni/net.d")
 	},
@@ -121,21 +122,27 @@ var generators = map[string]func(roleContext) error{
 	},
 }
 
-// podMTU leaves room in the node's MTU for the VXLAN header pod traffic
-// between nodes is carried in.
-func podMTU() int {
+// podMTU is the MTU of the interface holding the node's address, the one pod
+// traffic between nodes leaves through, less the VXLAN header when the node
+// carries pod traffic in VXLAN.
+func podMTU(nodeIP net.IP) int {
 	mtu := 1500
-	if routes, err := netlink.RouteList(nil, netlink.FAMILY_V4); err == nil {
-		for _, r := range routes {
-			if r.Dst == nil || r.Dst.IP.IsUnspecified() {
-				if l, err := netlink.LinkByIndex(r.LinkIndex); err == nil && l.Attrs().MTU > 0 {
+	if links, err := netlink.LinkList(); err == nil {
+	find:
+		for _, l := range links {
+			addrs, _ := netlink.AddrList(l, netlink.FAMILY_V4)
+			for _, a := range addrs {
+				if a.IP.Equal(nodeIP) && l.Attrs().MTU > 0 {
 					mtu = l.Attrs().MTU
-					break
+					break find
 				}
 			}
 		}
 	}
-	return mtu - vxlanOverhead
+	if podNetworkMode == "vxlan" {
+		mtu -= vxlanOverhead
+	}
+	return mtu
 }
 
 // vxlanOverhead matches nodeapi.VXLANOverhead; kinit does not import the

@@ -48,6 +48,10 @@ type peer struct {
 // the cluster's pod range, claimed by exactly one node, are routed. Routes into
 // the pod range that no node claims any more are removed.
 func syncRoutes(ctx context.Context, kubeconfig, self string, podRange *net.IPNet, mode string) {
+	if podRange != nil && podRange.IP.To4() == nil {
+		klog.Errorf("pod network %s: only an IPv4 pod range is routed between nodes; use a CNI package", podRange)
+		return
+	}
 	var client kubernetes.Interface
 	for ctx.Err() == nil {
 		if client == nil {
@@ -194,7 +198,7 @@ func ensureVXLAN(own *peer) (netlink.Link, error) {
 	ip, mac := vtep(own.subnet)
 	if l, err := netlink.LinkByName(vxlanDevice); err == nil {
 		vx, ok := l.(*netlink.Vxlan)
-		if ok && vx.VxlanId == vxlanID && vx.SrcAddr.Equal(own.node) && vx.HardwareAddr.String() == mac.String() {
+		if ok && vx.VxlanId == vxlanID && vx.SrcAddr.Equal(own.node) && vx.HardwareAddr.String() == mac.String() && vx.MTU == mtu-VXLANOverhead {
 			return l, ensureUp(l, ip)
 		}
 		if err := netlink.LinkDel(l); err != nil {
