@@ -54,6 +54,7 @@ func boot() error {
 	cfg := loadCmdline()
 	podNetworkMode = cfg.podNetwork
 	activeProfile = loadProfileOrRescue()
+	loadModulesAndLock(activeProfile.Spec.Modules)
 	if err := applySysctls(activeProfile.Spec.Sysctls); err != nil {
 		log.Printf("sysctls: %v", err)
 	}

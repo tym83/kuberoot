@@ -27,10 +27,19 @@ type Profile struct {
 	Spec Spec `json:"spec"`
 }
 
+// Module is a kernel module and its parameters.
+type Module struct {
+	Name   string `json:"name"`
+	Params string `json:"params,omitempty"`
+}
+
 type Spec struct {
 	Sysctls map[string]string `json:"sysctls,omitempty"`
-	Roles   map[string]Role   `json:"roles"`
-	NodeAPI NodeAPI           `json:"nodeAPI,omitempty"`
+	// Modules are loaded at boot, in order, from the out-of-tree modules
+	// built with the kernel; module loading is then disabled.
+	Modules []Module        `json:"modules,omitempty"`
+	Roles   map[string]Role `json:"roles"`
+	NodeAPI NodeAPI         `json:"nodeAPI,omitempty"`
 }
 
 type Role struct {

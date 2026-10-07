@@ -12,6 +12,9 @@
 #                                        registry and a signed test index at repo/index.yaml
 #   hack/hetzner.sh node <name> <arch>   a VM booting the current media (hetzner/node.yaml)
 #   hack/hetzner.sh console <name>       serial console of a node
+#   hack/hetzner.sh kp <cluster> args    kubepkg CLI in the builder against a cluster whose
+#                                        kubeconfig is /work/kube/<cluster>.conf
+#   hack/hetzner.sh kc <cluster> args    kubectl in the builder against /work/kube/<cluster>.conf
 #   hack/hetzner.sh test                 sync, then go test ./... in the builder
 #   hack/hetzner.sh sh [cmd...]          a shell (or a command) in the builder
 set -euo pipefail
@@ -41,11 +44,11 @@ case "${1:-}" in
   sync) sync ;;
   kernel)
     prepare; sync
-    tools sh -c "$ENV $SRC/scripts/build-kernel.sh $2" ;;
+    tools sh -c "$ENV $SRC/scripts/build-kernel.sh $2 && $ENV $SRC/scripts/build-drbd.sh $2" ;;
   build)
     arch=${2:?arch required}
     prepare; sync
-    tools sh -c "[ -f /work/out/$arch/vmlinuz.efi ] || $ENV $SRC/scripts/build-kernel.sh $arch"
+    tools sh -c "[ -f /work/out/$arch/vmlinuz.efi ] || { $ENV $SRC/scripts/build-kernel.sh $arch && $ENV $SRC/scripts/build-drbd.sh $arch; }"
     tools sh -c "cd $SRC && $ENV scripts/build-binaries.sh $arch"
     alpine sh -c "$ENV KUBEROOT_VERSION=${KUBEROOT_VERSION:-} KUBEROOT_DISTRO=${KUBEROOT_DISTRO:-edge} sh $SRC/scripts/build-rootfs.sh $arch"
     tools sh -c "$ENV $SRC/scripts/build-initramfs.sh $arch" ;;
@@ -76,6 +79,12 @@ case "${1:-}" in
     sed "s/NODE/${2:?name required}/g; s/ARCH/${3:?arch required}/g" "$ROOT/hack/hetzner/node.yaml" | kubectl --context "$CTX" apply -f - ;;
   console)
     virtctl --context "$CTX" -n "$NS" console "vm-instance-${2:?name required}" ;;
+  kp)
+    c=${2:?cluster required}; shift 2
+    tools sh -c "KUBECONFIG=/work/kube/$c.conf /work/bin/kubepkg $*" ;;
+  kc)
+    c=${2:?cluster required}; shift 2
+    tools sh -c "KUBECONFIG=/work/kube/$c.conf /work/bin/kubectl $*" ;;
   test)
     sync
     tools sh -c "cd $SRC && go test ./... 2>&1 | grep -v 'no test files'" ;;

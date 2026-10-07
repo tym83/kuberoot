@@ -50,6 +50,8 @@ cp -r "$OUT/glibc/." $r/
 cp -r "$ROOT/rootfs/." $r/
 install -m 0644 "$ROOT/distros/$DISTRO/profile.yaml" $r/usr/share/kuberoot/profile.yaml
 install -m 0644 "$OUT/release.pub" $r/usr/share/kuberoot/release.pub
+# Out-of-tree modules built and signed with this kernel (build-drbd.sh).
+[ -d "$OUT/modules" ] && cp -r "$OUT/modules/." $r/lib/modules/
 printf 'NAME="kuberoot"\nID=kuberoot\nPRETTY_NAME="kuberoot %s (%s)"\nVERSION_ID=%s\nHOME_URL="https://github.com/tym83/kuberoot"\n' "$VERSION" "$DISTRO" "$VERSION" > $r/etc/os-release
 # /lib/modules: agents (Cilium) mount it from the host, even with no modules.
 mkdir -p $r/dev $r/proc $r/sys $r/run $r/tmp $r/var $r/etc/kubernetes $r/etc/cni/net.d $r/opt/cni/bin $r/lib/modules

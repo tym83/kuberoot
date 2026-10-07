@@ -29,7 +29,12 @@ frags="$ROOT/kernel/base.config"
 for f in "$ARCH.config" "$@"; do [ -f "$ROOT/kernel/$f" ] && frags="$frags $ROOT/kernel/$f"; done
 KCONFIG_CONFIG="$O/.config" scripts/kconfig/merge_config.sh -m -O "$O" "$O/.config" $frags >/dev/null
 make -s ARCH=$KARCH O="$O" olddefconfig
-make -s ARCH=$KARCH O="$O" -j"$(nproc)" "$(basename $IMAGE)"
+# Modules are on only for out-of-tree drivers: everything defconfig would
+# build as a module is built in, as it was with modules off.
+sed -i 's/=m$/=y/' "$O/.config"
+make -s ARCH=$KARCH O="$O" olddefconfig
+make -s ARCH=$KARCH O="$O" -j"$(nproc)" "$(basename $IMAGE)" modules
+grep -q "=m$" "$O/.config" && { echo "modules left in the kernel config:" >&2; grep "=m$" "$O/.config" >&2; exit 1; }
 cp "$O/$IMAGE" "$OUT/vmlinuz.efi"
 cp "$O/.config" "$OUT/kernel.config"
 echo "kernel: $OUT/vmlinuz.efi ($(du -h "$OUT/vmlinuz.efi" | cut -f1))"
