@@ -299,7 +299,7 @@ func CurrentBootArgs() string { return consoleArgs() }
 var carriedArgs = []string{
 	"console=",
 	"kuberoot.nameserver=", "kuberoot.ip=",
-	"kuberoot.pod-cidr=", "kuberoot.service-cidr=",
+	"kuberoot.pod-cidr=", "kuberoot.service-cidr=", "kuberoot.pod-network=",
 	"kuberoot.distro=", "kuberoot.repo=", "kuberoot.repo-key=",
 }
 
