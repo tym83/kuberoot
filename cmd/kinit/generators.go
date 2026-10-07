@@ -108,7 +108,7 @@ var generators = map[string]func(roleContext) error{
 		} else {
 			files["/etc/cni/kuberoot.conflist.tmpl"] = strings.Replace(cniConfig, "__MTU__", strconv.Itoa(podMTU()), 1)
 		}
-		return writeFiles(files, "/var/lib/containerd", "/etc/cni/net.d", "/var/lib/cni/bin")
+		return writeFiles(files, "/var/lib/containerd", "/etc/cni/net.d")
 	},
 	// kubelet: its configuration, with serving certificates from the cluster CA
 	// on the control plane and requested through the CSR API on members.

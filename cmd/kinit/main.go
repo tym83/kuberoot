@@ -174,7 +174,8 @@ func unmountState() {
 	var below []string
 	for _, line := range strings.Split(string(raw), "\n") {
 		f := strings.Fields(line)
-		if len(f) > 1 && strings.HasPrefix(f[1], "/var/") {
+		// /opt/cni/bin is a bind mount of a directory on /var.
+		if len(f) > 1 && (strings.HasPrefix(f[1], "/var/") || f[1] == "/opt/cni/bin") {
 			below = append(below, f[1])
 		}
 	}

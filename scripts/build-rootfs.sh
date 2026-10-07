@@ -51,7 +51,7 @@ cp -r "$ROOT/rootfs/." $r/
 install -m 0644 "$ROOT/distros/$DISTRO/profile.yaml" $r/usr/share/kuberoot/profile.yaml
 install -m 0644 "$OUT/release.pub" $r/usr/share/kuberoot/release.pub
 printf 'NAME="kuberoot"\nID=kuberoot\nPRETTY_NAME="kuberoot %s (%s)"\nVERSION_ID=%s\nHOME_URL="https://github.com/tym83/kuberoot"\n' "$VERSION" "$DISTRO" "$VERSION" > $r/etc/os-release
-mkdir -p $r/dev $r/proc $r/sys $r/run $r/tmp $r/var $r/etc/kubernetes $r/etc/cni/net.d
+mkdir -p $r/dev $r/proc $r/sys $r/run $r/tmp $r/var $r/etc/kubernetes $r/etc/cni/net.d $r/opt/cni/bin
 rm -f "$OUT/rootfs.squashfs"
 mksquashfs $r "$OUT/rootfs.squashfs" -comp zstd -all-root -noappend -quiet
 rm -rf $r

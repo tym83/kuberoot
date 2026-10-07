@@ -29,6 +29,10 @@ var mounts = []mount{
 	{"bpf", "/sys/fs/bpf", "bpf", unix.MS_NOSUID | unix.MS_NODEV | unix.MS_NOEXEC, "mode=0700"},
 }
 
+// cniPluginDir holds CNI plugins that packages install; it appears at
+// /opt/cni/bin, where they expect it.
+const cniPluginDir = "/var/lib/cni/bin"
+
 func mountAll() error {
 	for _, m := range mounts {
 		if err := os.MkdirAll(m.target, 0o755); err != nil {
@@ -39,6 +43,13 @@ func mountAll() error {
 		}
 		if err := unix.Mount(m.source, m.target, m.fstype, m.flags, m.data); err != nil {
 			return fmt.Errorf("mount %s: %w", m.target, err)
+		}
+	}
+	// CNI packages install their plugins into /opt/cni/bin by convention;
+	// the root is read-only, so that directory is a writable one from /var.
+	if err := os.MkdirAll(cniPluginDir, 0o755); err == nil && !isMountpoint("/opt/cni/bin") {
+		if err := unix.Mount(cniPluginDir, "/opt/cni/bin", "", unix.MS_BIND, ""); err != nil {
+			return fmt.Errorf("mount /opt/cni/bin: %w", err)
 		}
 	}
 	// Mounts propagate both ways, as under systemd: the kubelet and the

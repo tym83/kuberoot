@@ -83,9 +83,9 @@ state = "/run/containerd"
   address = "/run/containerd/containerd.sock"
 
 [plugins.'io.containerd.cri.v1.runtime'.cni]
-  # The built-in plugins, and a writable place for plugins a CNI package
-  # installs (Cilium's agent puts its plugin there).
-  bin_dirs = ["/usr/libexec/cni", "/var/lib/cni/bin"]
+  # The built-in plugins, and /opt/cni/bin, writable, where CNI packages
+  # such as Cilium install theirs.
+  bin_dirs = ["/usr/libexec/cni", "/opt/cni/bin"]
   conf_dir = "/etc/cni/net.d"
   # The kubelet passes the pod subnet the control plane assigned to this node;
   # containerd fills it into this template and writes the CNI configuration.
