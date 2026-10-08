@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -62,5 +63,18 @@ func TestNoPodNetworkLeavesTheCNITemplateOut(t *testing.T) {
 	}
 	if strings.Contains(strings.Replace(containerdConfig, cniTemplateLine, "", 1), "conf_template") {
 		t.Error("conf_template is still set with pod-network=none")
+	}
+}
+
+func TestNodeKeepsTheNameItFirstBootedWith(t *testing.T) {
+	saved := nodeNameFile
+	nodeNameFile = filepath.Join(t.TempDir(), "kuberoot", "node-name")
+	defer func() { nodeNameFile = saved }()
+	if got := keptNodeName("kuberoot-aaaaaa"); got != "kuberoot-aaaaaa" {
+		t.Errorf("first boot: %s", got)
+	}
+	// New hardware, or the state restored onto it.
+	if got := keptNodeName("kuberoot-bbbbbb"); got != "kuberoot-aaaaaa" {
+		t.Errorf("after the network card changed: %s, want the first name", got)
 	}
 }

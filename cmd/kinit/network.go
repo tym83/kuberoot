@@ -6,10 +6,12 @@ import (
 	"log"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/insomniacslk/dhcp/dhcpv4/nclient4"
+	"github.com/tym83/kuberoot/pkg/atomicfile"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 )
@@ -39,7 +41,7 @@ func setupNetwork(cfg bootConfig) (nodeInfo, error) {
 		return node, fmt.Errorf("%s up: %w", link.Attrs().Name, err)
 	}
 	mac := link.Attrs().HardwareAddr
-	node.name = fmt.Sprintf("kuberoot-%02x%02x%02x", mac[3], mac[4], mac[5])
+	node.name = keptNodeName(fmt.Sprintf("kuberoot-%02x%02x%02x", mac[3], mac[4], mac[5]))
 	node.ip, err = dhcp(link, cfg.nameservers)
 	if err != nil || cfg.static == "" {
 		return node, err
@@ -135,4 +137,23 @@ func dhcp(link netlink.Link, nameservers []string) (net.IP, error) {
 	}
 	log.Printf("%s: %s via %v", name, ipnet, ack.Router())
 	return ack.YourIPAddr, nil
+}
+
+// nodeNameFile keeps the name a node first booted with. The name comes from
+// the network card, and a node keeps it when the card changes: a control
+// plane restored onto new hardware is the same node to the cluster.
+var nodeNameFile = "/var/lib/kuberoot/node-name"
+
+func keptNodeName(fromHardware string) string {
+	if raw, err := os.ReadFile(nodeNameFile); err == nil {
+		if name := strings.TrimSpace(string(raw)); name != "" {
+			return name
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(nodeNameFile), 0o755); err == nil {
+		if err := atomicfile.WriteFile(nodeNameFile, []byte(fromHardware+"\n"), 0o644); err != nil {
+			log.Printf("keep node name: %v", err)
+		}
+	}
+	return fromHardware
 }
