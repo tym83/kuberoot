@@ -113,3 +113,17 @@ func TestUploadFailureIsRecordedAndRetried(t *testing.T) {
 		t.Errorf("after the retry: %+v", b.Status)
 	}
 }
+
+func TestBackupsAreOrderedByWhenTheyWereTaken(t *testing.T) {
+	s := fakeBackups(t)
+	for _, name := range []string{"zz-first", "aa-second"} {
+		if _, err := s.take(name); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(1100 * time.Millisecond) // archives are stamped to the second
+	}
+	s.prune(1)
+	if got := strings.Join(s.names(), ","); got != "aa-second" {
+		t.Errorf("kept %s, want the newest", got)
+	}
+}

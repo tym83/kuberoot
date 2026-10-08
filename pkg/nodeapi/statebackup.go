@@ -148,14 +148,25 @@ func (s *stateBackupStorage) save(name string, st node.StateBackupStatus) error 
 	return os.Rename(tmp, s.meta(name))
 }
 
-// names lists the backups, oldest first.
+// names lists the backups, oldest first: by when they were taken, whatever
+// they are called.
 func (s *stateBackupStorage) names() []string {
 	files, _ := filepath.Glob(filepath.Join(s.dir, "*.json"))
+	taken := map[string]time.Time{}
 	var out []string
 	for _, f := range files {
-		out = append(out, strings.TrimSuffix(filepath.Base(f), ".json"))
+		name := strings.TrimSuffix(filepath.Base(f), ".json")
+		if b, err := s.load(name); err == nil {
+			taken[name] = b.Status.CreatedAt.Time
+		}
+		out = append(out, name)
 	}
-	sort.Strings(out)
+	sort.Slice(out, func(i, j int) bool {
+		if !taken[out[i]].Equal(taken[out[j]]) {
+			return taken[out[i]].Before(taken[out[j]])
+		}
+		return out[i] < out[j]
+	})
 	return out
 }
 
