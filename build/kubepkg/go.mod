@@ -4,7 +4,7 @@ module github.com/tym83/kuberoot/build/kubepkg
 
 go 1.26.5
 
-require github.com/tym83/kubepkg v1.0.0-rc.1
+require github.com/tym83/kubepkg v1.0.0-rc.2
 
 require (
 	dario.cat/mergo v1.0.1 // indirect
