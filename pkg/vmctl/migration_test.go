@@ -42,3 +42,12 @@ func TestMigratingOnlyWhenEverythingIsReady(t *testing.T) {
 		t.Errorf("port %d", migrationPort(p))
 	}
 }
+
+func TestBothPrimary(t *testing.T) {
+	if bothPrimary(map[string]disk{"a": {role: "Primary"}, "b": {role: "Secondary"}}) {
+		t.Fatal("one primary taken for two")
+	}
+	if !bothPrimary(map[string]disk{"a": {role: "Primary"}, "b": {role: "Primary"}}) {
+		t.Fatal("two primaries not seen")
+	}
+}

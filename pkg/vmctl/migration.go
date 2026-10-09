@@ -49,7 +49,7 @@ func (c *Controller) migrate(ctx context.Context, m *v1.VirtualMachine, p Plan, 
 		klog.Errorf("%s: live move to %s failed: %s", m.Name, dst, reason)
 		_ = c.Dynamic.Resource(machinesGVR).Delete(ctx, dst+"."+m.Name, metav1.DeleteOptions{})
 		_ = c.ensure(ctx, machinesGVR, src+"."+m.Name, map[string]any{"spec": toMap(ptr(machineSpec(m, p, true)))})
-		_ = c.ensureVolumes(ctx, m, p, &st, byName, map[string]bool{src: true}, false)
+		_ = c.ensureVolumes(ctx, m, p, &st, byName, map[string]bool{src: true}, bothPrimary(mine))
 		st.Migration, st.FailedMigration, st.Phase = nil, dst, "Running"
 		st.Message = "live move to " + dst + " failed: " + reason
 		return st
@@ -100,7 +100,7 @@ func (c *Controller) migrate(ctx context.Context, m *v1.VirtualMachine, p Plan, 
 			_ = c.Dynamic.Resource(machinesGVR).Delete(ctx, src+"."+m.Name, metav1.DeleteOptions{})
 			st.Node, st.Migration, st.Phase, st.Message = dst, nil, "Running", "moved alive from "+src
 			p.Node = dst
-			_ = c.ensureVolumes(ctx, m, p, &st, byName, map[string]bool{dst: true}, false)
+			_ = c.ensureVolumes(ctx, m, p, &st, byName, map[string]bool{dst: true}, true)
 		case srcPhase == "Failed":
 			return abort("the source could not send: " + srcMsg)
 		case dstPhase == "Failed":

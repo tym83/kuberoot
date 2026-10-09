@@ -239,6 +239,9 @@ func ready(nodes []Node, name string) bool {
 func (c *Controller) apply(ctx context.Context, m *v1.VirtualMachine, p Plan, nodes []Node, mine map[string]disk) v1.VirtualMachineStatus {
 	st := v1.VirtualMachineStatus{Node: p.Node, ReplicaNodes: p.ReplicaNodes, MAC: p.MAC, Minor: p.Minor, Port: p.Port,
 		Moves: m.Status.Moves, Phase: "Pending", ImageWritten: m.Status.ImageWritten, ReplicaAddresses: map[string]string{}}
+	if m.Status.FailedMigration == m.Spec.Node {
+		st.FailedMigration = m.Status.FailedMigration
+	}
 	for k, v := range m.Status.ReplicaAddresses {
 		st.ReplicaAddresses[k] = v
 	}
@@ -282,7 +285,7 @@ func (c *Controller) apply(ctx context.Context, m *v1.VirtualMachine, p Plan, no
 	if running {
 		primary[p.Node] = true
 	}
-	if err := c.ensureVolumes(ctx, m, p, &st, byName, primary, false); err != nil {
+	if err := c.ensureVolumes(ctx, m, p, &st, byName, primary, bothPrimary(mine)); err != nil {
 		st.Message = err.Error()
 		return st
 	}
@@ -545,6 +548,18 @@ func machineSpec(m *v1.VirtualMachine, p Plan, running bool) nodev1.MachineSpec 
 		cpus = 1
 	}
 	return nodev1.MachineSpec{CPUs: cpus, MemoryMiB: mem, Volumes: []string{m.Name}, MAC: p.MAC, Running: running}
+}
+
+// bothPrimary: the disk is still writable on two nodes, after a live move or
+// one abandoned; it stays allowed to be until one of them steps down.
+func bothPrimary(mine map[string]disk) bool {
+	n := 0
+	for _, d := range mine {
+		if d.role == "Primary" {
+			n++
+		}
+	}
+	return n > 1
 }
 
 // ensureVolumes keeps the machine's disk on every replica node that is up,
