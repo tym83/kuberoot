@@ -404,3 +404,52 @@ type BGPPeerList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []BGPPeer `json:"items"`
 }
+
+// Safeguard makes every change of the router's configuration a trial: the
+// node runs it, and unless it is confirmed in time (spec.confirm set to the
+// revision status.pending names), the node goes back to the last confirmed
+// configuration. A change that cuts the administrators off undoes itself.
+// There is one, named default; without it every change is final at once.
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Cluster
+// +kubebuilder:subresource:status
+// +kubebuilder:validation:XValidation:rule="self.metadata.name == 'default'",message="the safeguard is named default"
+// +kubebuilder:printcolumn:name=Running,type=string,JSONPath=`.status.running`
+// +kubebuilder:printcolumn:name=Pending,type=string,JSONPath=`.status.pending`
+// +kubebuilder:printcolumn:name=Deadline,type=date,JSONPath=`.status.deadline`
+// +kubebuilder:printcolumn:name=Rolled Back,type=string,JSONPath=`.status.rolledBack`
+type Safeguard struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   SafeguardSpec   `json:"spec,omitempty"`
+	Status SafeguardStatus `json:"status,omitempty"`
+}
+
+type SafeguardSpec struct {
+	// ConfirmWithin is how long a change runs on trial.
+	// +kubebuilder:default="2m"
+	ConfirmWithin metav1.Duration `json:"confirmWithin,omitempty"`
+	// Confirm makes the pending revision final.
+	// +optional
+	Confirm string `json:"confirm,omitempty"`
+}
+
+type SafeguardStatus struct {
+	Status `json:",inline"`
+	// Running is the revision the node runs; Confirmed the last one confirmed.
+	Running   string `json:"running,omitempty"`
+	Confirmed string `json:"confirmed,omitempty"`
+	// Pending is the revision on trial, until Deadline.
+	Pending  string       `json:"pending,omitempty"`
+	Deadline *metav1.Time `json:"deadline,omitempty"`
+	// RolledBack is the last revision undone for want of confirmation.
+	RolledBack string `json:"rolledBack,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+type SafeguardList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []Safeguard `json:"items"`
+}

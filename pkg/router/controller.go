@@ -33,6 +33,7 @@ var kinds = []struct{ Kind, Plural string }{
 	{"Interface", "interfaces"}, {"Route", "routes"}, {"NATRule", "natrules"},
 	{"FirewallZone", "firewallzones"}, {"FirewallRule", "firewallrules"},
 	{"DHCPServer", "dhcpservers"}, {"BGPRouter", "bgprouters"}, {"BGPPeer", "bgppeers"},
+	{"Safeguard", "safeguards"},
 }
 
 func resource(plural string) schema.GroupVersionResource {
@@ -49,6 +50,7 @@ type Controller struct {
 	// RouterID for BGP when the BGPRouter names none.
 	RouterID string
 
+	trial                 trial
 	dnsmasq, bird         *Daemon
 	ruleset               string
 	dnsmasqConf, birdConf string
@@ -68,6 +70,7 @@ func (c *Controller) Run(ctx context.Context) error {
 	defer c.dnsmasq.Stop()
 	defer c.bird.Stop()
 
+	c.trial.load(c.confirmedFile())
 	factory := dynamicinformer.NewDynamicSharedInformerFactory(c.Client, 10*time.Minute)
 	poke := make(chan struct{}, 1)
 	notify := func(any) {
@@ -87,10 +90,13 @@ func (c *Controller) Run(ctx context.Context) error {
 	factory.Start(ctx.Done())
 	factory.WaitForCacheSync(ctx.Done())
 
-	tick := time.NewTicker(30 * time.Second)
-	defer tick.Stop()
 	for {
 		c.reconcile(ctx)
+		// Every half minute, and right at the end of a trial.
+		wait := 30 * time.Second
+		if !c.trial.deadline.IsZero() {
+			wait = min(wait, time.Until(c.trial.deadline)+time.Second)
+		}
 		select {
 		case <-ctx.Done():
 			return nil
@@ -101,7 +107,7 @@ func (c *Controller) Run(ctx context.Context) error {
 			case <-poke:
 			default:
 			}
-		case <-tick.C:
+		case <-time.After(wait):
 		}
 	}
 }
@@ -167,6 +173,10 @@ func appendTyped(cfg *Config, kind string, u *unstructured.Unstructured) error {
 		var x v1.BGPPeer
 		err = conv.FromUnstructured(u.Object, &x)
 		cfg.Peers = append(cfg.Peers, x)
+	case "Safeguard":
+		var x v1.Safeguard
+		err = conv.FromUnstructured(u.Object, &x)
+		cfg.Safeguards = append(cfg.Safeguards, x)
 	}
 	return err
 }
@@ -177,13 +187,40 @@ func (c *Controller) reconcile(ctx context.Context) {
 		klog.Errorf("list: %v", err)
 		return
 	}
-	ok, problems := Check(cfg)
+	candidate, problems := Check(cfg)
+	var guard *v1.Safeguard
+	for i := range cfg.Safeguards {
+		if cfg.Safeguards[i].Name == "default" {
+			guard = &cfg.Safeguards[i]
+		} else {
+			problems[Ref{"Safeguard", cfg.Safeguards[i].Name}] = "the safeguard is named default"
+		}
+	}
+	rev := Revision(candidate)
+	ok, running, changed := c.trial.decide(candidate, rev, guard, time.Now())
+	if changed {
+		if err := c.trial.save(c.confirmedFile()); err != nil {
+			klog.Errorf("keep the confirmed configuration: %v", err)
+		}
+	}
 	failed := map[Ref]error{}
+	if running != rev {
+		undone := fmt.Errorf("revision %s was not confirmed in time; the node runs the last confirmed one, %s", rev, running)
+		for _, k := range kinds {
+			if k.Kind != "Safeguard" {
+				failed[Ref{k.Kind, "*"}] = undone
+			}
+		}
+	}
 	for name, err := range ApplyInterfaces(ok.Interfaces) {
-		failed[Ref{"Interface", name}] = err
+		if failed[Ref{"Interface", "*"}] == nil {
+			failed[Ref{"Interface", name}] = err
+		}
 	}
 	for name, err := range ApplyRoutes(ok.Routes) {
-		failed[Ref{"Route", name}] = err
+		if failed[Ref{"Route", "*"}] == nil {
+			failed[Ref{"Route", name}] = err
+		}
 	}
 	if err := c.applyRuleset(Ruleset(ok)); err != nil {
 		for _, kind := range []string{"NATRule", "FirewallZone", "FirewallRule"} {
@@ -210,13 +247,15 @@ func (c *Controller) reconcile(ctx context.Context) {
 	sessions := c.sessions(ctx)
 	leases := c.leases()
 	for _, l := range all {
-		err := failed[l.ref]
+		err := failed[Ref{l.ref.Kind, "*"}]
 		if err == nil {
-			err = failed[Ref{l.ref.Kind, "*"}]
+			err = failed[l.ref]
 		}
 		c.report(ctx, l, problems[l.ref], err, ok, sessions, leases)
 	}
 }
+
+func (c *Controller) confirmedFile() string { return filepath.Join(c.StateDir, "confirmed.json") }
 
 func (c *Controller) applyRuleset(rs string) error {
 	// Applied again when the table went missing, say flushed by hand.
@@ -350,6 +389,19 @@ func (c *Controller) report(ctx context.Context, l listed, problem string, apply
 			items = append(items, u)
 		}
 		extra["leases"] = items
+	case "Safeguard":
+		extra["running"], extra["confirmed"], extra["rolledBack"] = c.trial.confirmedRev, c.trial.confirmedRev, c.trial.rolledBack
+		if c.trial.pending != "" {
+			extra["running"], extra["pending"] = c.trial.pending, c.trial.pending
+			extra["deadline"] = c.trial.deadline.UTC().Format(time.RFC3339)
+		} else {
+			extra["pending"], extra["deadline"] = nil, nil
+		}
+		for k, v := range extra {
+			if v == "" {
+				extra[k] = nil
+			}
+		}
 	case "BGPPeer":
 		st, found := sessions[PeerProtocol(l.ref.Name)]
 		if !found {

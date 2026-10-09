@@ -21,6 +21,8 @@ type Config struct {
 	DHCP       []v1.DHCPServer
 	BGP        []v1.BGPRouter
 	Peers      []v1.BGPPeer
+	// Safeguards decide how changes apply; not part of the configuration.
+	Safeguards []v1.Safeguard `json:"-"`
 }
 
 // Ref names a resource: its kind and name.

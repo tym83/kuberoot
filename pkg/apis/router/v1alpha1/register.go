@@ -24,6 +24,7 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&DHCPServer{}, &DHCPServerList{},
 		&BGPRouter{}, &BGPRouterList{},
 		&BGPPeer{}, &BGPPeerList{},
+		&Safeguard{}, &SafeguardList{},
 	)
 	metav1.AddToGroupVersion(scheme, GroupVersion)
 	return nil

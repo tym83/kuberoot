@@ -1,0 +1,81 @@
+package router
+
+import (
+	"path/filepath"
+	"testing"
+	"time"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	v1 "github.com/tym83/kuberoot/pkg/apis/router/v1alpha1"
+)
+
+func withRoute(dst string) Config {
+	return Config{Routes: []v1.Route{{ObjectMeta: named("r"), Spec: v1.RouteSpec{Destination: dst, Link: "eth1"}}}}
+}
+
+func TestRevisionFollowsTheSpecs(t *testing.T) {
+	a, b := withRoute("10.0.0.0/8"), withRoute("10.0.0.0/8")
+	b.Routes[0].Status.ObservedGeneration = 7 // status is not configuration
+	if Revision(a) != Revision(b) {
+		t.Error("the same specs give different revisions")
+	}
+	if Revision(a) == Revision(withRoute("10.1.0.0/16")) {
+		t.Error("different specs give the same revision")
+	}
+}
+
+func TestSafeguardTrialConfirmAndRollback(t *testing.T) {
+	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	guard := &v1.Safeguard{ObjectMeta: named("default"), Spec: v1.SafeguardSpec{ConfirmWithin: metav1.Duration{Duration: 2 * time.Minute}}}
+	good, bad := withRoute("10.0.0.0/8"), withRoute("0.0.0.0/0")
+	goodRev, badRev := Revision(good), Revision(bad)
+	var tr trial
+
+	// The first configuration is the baseline.
+	if _, rev, changed := tr.decide(good, goodRev, guard, now); rev != goodRev || !changed {
+		t.Fatalf("baseline: running %s, changed %v", rev, changed)
+	}
+	// A change runs on trial.
+	if _, rev, _ := tr.decide(bad, badRev, guard, now.Add(time.Minute)); rev != badRev || tr.pending != badRev {
+		t.Fatalf("trial: running %s, pending %s", rev, tr.pending)
+	}
+	// Out of time: back to the confirmed one, and it stays back.
+	if c, rev, _ := tr.decide(bad, badRev, guard, now.Add(3*time.Minute+time.Second)); rev != goodRev || Revision(c) != goodRev || tr.rolledBack != badRev {
+		t.Fatalf("rollback: running %s, rolled back %s", rev, tr.rolledBack)
+	}
+	if _, rev, _ := tr.decide(bad, badRev, guard, now.Add(time.Hour)); rev != goodRev {
+		t.Fatalf("the undone revision came back: running %s", rev)
+	}
+	// Changing the resources again starts a new trial; confirming makes it final.
+	fixed := withRoute("192.168.0.0/16")
+	fixedRev := Revision(fixed)
+	if _, rev, _ := tr.decide(fixed, fixedRev, guard, now.Add(2*time.Hour)); rev != fixedRev || tr.pending != fixedRev {
+		t.Fatalf("new trial: running %s, pending %s", rev, tr.pending)
+	}
+	guard.Spec.Confirm = fixedRev
+	_, rev, changed := tr.decide(fixed, fixedRev, guard, now.Add(2*time.Hour+time.Minute))
+	if rev != fixedRev || !changed || tr.confirmedRev != fixedRev || tr.pending != "" || tr.rolledBack != "" {
+		t.Fatalf("confirm: running %s, confirmed %s, pending %q", rev, tr.confirmedRev, tr.pending)
+	}
+
+	// The confirmed configuration survives a restart of the controller.
+	path := filepath.Join(t.TempDir(), "confirmed.json")
+	if err := tr.save(path); err != nil {
+		t.Fatal(err)
+	}
+	var again trial
+	again.load(path)
+	if again.confirmedRev != fixedRev || Revision(again.confirmed) != fixedRev {
+		t.Errorf("after a restart: confirmed %s", again.confirmedRev)
+	}
+}
+
+func TestWithoutSafeguardEveryChangeIsFinal(t *testing.T) {
+	var tr trial
+	a, b := withRoute("10.0.0.0/8"), withRoute("10.1.0.0/16")
+	tr.decide(a, Revision(a), nil, time.Now())
+	if _, rev, changed := tr.decide(b, Revision(b), nil, time.Now()); rev != Revision(b) || !changed || tr.pending != "" {
+		t.Errorf("running %s, changed %v, pending %q", rev, changed, tr.pending)
+	}
+}
