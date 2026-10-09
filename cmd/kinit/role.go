@@ -8,6 +8,7 @@ import (
 
 	"github.com/vishvananda/netlink"
 
+	"github.com/tym83/kuberoot/pkg/distro"
 	"github.com/tym83/kuberoot/pkg/membership"
 )
 
@@ -51,9 +52,13 @@ func configure(node nodeInfo, cfg bootConfig) ([]service, bool, error) {
 	if !ok {
 		return nil, false, fmt.Errorf("distribution %s has no %s role", activeProfile.Metadata.Name, roleName)
 	}
+	activeRole = spec
 	services, err := renderRole(spec, r, cfg)
 	return services, spec.Addons, err
 }
+
+// activeRole is the profile's description of the role this node runs.
+var activeRole distro.Role
 
 // quarantineMembership moves the membership aside, kept for inspection.
 func quarantineMembership() {

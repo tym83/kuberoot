@@ -45,8 +45,11 @@ type Spec struct {
 type Role struct {
 	// Generators, by name, write what the role needs on disk.
 	Generators []string `json:"generators"`
-	// Addons: apply the bundled add-ons and install the distribution's packages.
-	Addons   bool      `json:"addons,omitempty"`
+	// Addons: apply the bundled add-ons, the image's own and its distribution's.
+	Addons bool `json:"addons,omitempty"`
+	// Packages: run on kubepkg; subscribe to the package repository and
+	// install the distribution's meta package, kuberoot-<distribution>.
+	Packages bool      `json:"packages,omitempty"`
 	Services []Service `json:"services"`
 }
 

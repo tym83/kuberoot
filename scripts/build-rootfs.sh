@@ -24,8 +24,11 @@ r=$(mktemp -d)
 mkdir -p $r/etc/apk
 cp -r /etc/apk/keys $r/etc/apk/
 cp /etc/apk/repositories $r/etc/apk/
+# The distribution may need more programs than the base (distros/<name>/apk).
+extra=""
+[ -f "$ROOT/distros/$DISTRO/apk" ] && extra=$(grep -v '^#' "$ROOT/distros/$DISTRO/apk" | tr '\n' ' ')
 apk add -q --root $r --initdb --no-scripts --no-cache \
-  nftables mount umount conntrack-tools ca-certificates-bundle e2fsprogs
+  nftables mount umount conntrack-tools ca-certificates-bundle e2fsprogs $extra
 rm -rf $r/etc/apk $r/lib/apk $r/var/cache/apk
 
 for b in kube-apiserver kube-controller-manager kube-scheduler kubelet kube-proxy kubectl; do
@@ -43,12 +46,14 @@ fetch "https://github.com/k3s-io/kine/releases/download/$KINE_VERSION/kine-$ARCH
 install -m 0755 "$CACHE/kine-$KINE_VERSION" $r/usr/bin/kine
 
 install -m 0755 "$OUT/kinit" $r/usr/sbin/kinit
-install -m 0755 "$OUT/kuberoot-node" "$OUT/kuberoot-installer" "$OUT/kuberoot-intents" "$OUT/kubepkg" "$OUT/kubepkg-operator" $r/usr/bin/
+install -m 0755 "$OUT/kuberoot-node" "$OUT/kuberoot-installer" "$OUT/kuberoot-intents" "$OUT/kuberoot-router" "$OUT/kubepkg" "$OUT/kubepkg-operator" $r/usr/bin/
 mkdir -p $r/usr/share/kuberoot/kubepkg/crds
 cp "$OUT"/kubepkg-crds/*.yaml $r/usr/share/kuberoot/kubepkg/crds/
 cp -r "$OUT/glibc/." $r/
 cp -r "$ROOT/rootfs/." $r/
 install -m 0644 "$ROOT/distros/$DISTRO/profile.yaml" $r/usr/share/kuberoot/profile.yaml
+# The distribution's own add-ons, next to the image's.
+if [ -d "$ROOT/distros/$DISTRO/addons" ]; then cp -r "$ROOT/distros/$DISTRO/addons/." $r/usr/share/kuberoot/addons/; fi
 install -m 0644 "$OUT/release.pub" $r/usr/share/kuberoot/release.pub
 # Out-of-tree modules built and signed with this kernel (build-drbd.sh).
 [ -d "$OUT/modules" ] && cp -r "$OUT/modules/." $r/lib/modules/

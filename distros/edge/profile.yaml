@@ -22,6 +22,7 @@ spec:
     controlPlane:
       generators: [node, cluster, containers, kubelet]
       addons: true
+      packages: true
       services:
       - name: kuberoot-node
         args:

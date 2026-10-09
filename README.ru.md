@@ -4,7 +4,7 @@
 
 kuberoot собирает дистрибутивы Kubernetes, которые загружаются прямо на железо. Каждый из них — один образ со своим ядром Linux, маленьким init, который поднимает Kubernetes, и нодой, которой управляют через сам API Kubernetes: нет SSH, нет оболочки и нет отдельной утилиты для ноды, до неё дотягивается `kubectl`. Всё поверх базы — пакеты [kubepkg](https://github.com/tym83/kubepkg), так что дистрибутив — это база плюс метапакет, как дистрибутив Linux — это ядро плюс пакеты.
 
-Пока в репозитории собирается один дистрибутив, `edge`: кластер общего назначения на одну или несколько нод.
+В репозитории собираются два дистрибутива: `edge` — кластер общего назначения на одну или несколько нод, и `router` — Kubernetes без контейнеров, работающий сетевым маршрутизатором.
 
 > Статус: эксперимент. Дистрибутив `edge` проходит набор тестов на соответствие Kubernetes (462 из 462 на кластере из трёх нод, Kubernetes 1.37.1), но API ноды и раскладка её состояния ещё могут меняться.
 
@@ -15,6 +15,51 @@ kuberoot собирает дистрибутивы Kubernetes, которые з
 - **API ноды**: каждая нода обслуживает `node.kuberoot.dev`, подключённый к API кластера, поэтому `kubectl get disks`, `kubectl get bootentries` или `kubectl create upgrade` действуют на ноду. Он работает и до того, как появится кластер, — так ноду и устанавливают.
 - **Сеть подов**: VXLAN между нодами, или обычные маршруты в плоской сети, или никакой — для CNI-пакета вроде Cilium.
 - **Пакеты**: оператор kubepkg работает на control plane и ставит пакеты дистрибутива; метапакет `edge` и пакеты платформы лежат в [kubepkg-recipes](https://github.com/tym83/kubepkg-recipes).
+
+## Дистрибутив router
+
+`router` оставляет от Kubernetes только то, что хранит конфигурацию и следит за ней: kine, API-сервер, controller manager для сборки мусора и API ноды. Нет kubelet, среды запуска контейнеров, kube-proxy и планировщика. Конфигурация маршрутизатора — ресурсы `router.kuberoot.dev`, с RBAC, аудитом, watch и GitOps, как у любых ресурсов, а `kuberoot-router` приводит к ним ноду:
+
+| Ресурс | Что настраивает |
+|---|---|
+| `Interface` | адреса и MTU линка или VLAN на родительском линке |
+| `Route` | статический маршрут |
+| `NATRule` | маскарадинг за исходящим линком или проброс порта на хост |
+| `FirewallZone`, `FirewallRule` | зоны линков: что может достучаться до маршрутизатора и что может ходить между зонами |
+| `DHCPServer` | DHCP на линке и DNS-кэш для него |
+| `BGPRouter`, `BGPPeer` | AS маршрутизатора, анонсируемые сети и BGP-сессии |
+| `Safeguard` | изменения на испытательном сроке, которые откатываются без подтверждения |
+
+Домашний шлюз с LAN на `eth1` за внешним `eth0`:
+
+```yaml
+apiVersion: router.kuberoot.dev/v1alpha1
+kind: Interface
+metadata: {name: lan}
+spec: {link: eth1, addresses: [192.168.10.1/24]}
+---
+apiVersion: router.kuberoot.dev/v1alpha1
+kind: NATRule
+metadata: {name: out}
+spec: {masquerade: {outLink: eth0, sources: [192.168.10.0/24]}}
+---
+apiVersion: router.kuberoot.dev/v1alpha1
+kind: DHCPServer
+metadata: {name: lan}
+spec: {link: eth1, rangeStart: 192.168.10.100, rangeEnd: 192.168.10.199}
+---
+apiVersion: router.kuberoot.dev/v1alpha1
+kind: FirewallZone
+metadata: {name: wan}
+spec: {links: [eth0], input: Drop, management: true}
+---
+apiVersion: router.kuberoot.dev/v1alpha1
+kind: FirewallZone
+metadata: {name: lan}
+spec: {links: [eth1], input: Accept, forwardTo: [wan]}
+```
+
+Каждый ресурс пишет в статус, исполняет ли его нода, а если нет — почему; интерфейсы показывают своё состояние, DHCP-серверы — аренды, BGP-соседи — сессии. Файрвол фильтрует только когда есть хотя бы одна зона, а API маршрутизатора остаётся открытым в зонах управления, что бы ни говорили правила. С `Safeguard` каждое изменение работает на испытательном сроке: если `spec.confirm` не назовёт его ревизию вовремя, маршрутизатор возвращается к последней подтверждённой конфигурации, так что изменение, отрезавшее администраторов, отменяет себя само.
 
 ## API ноды
 
@@ -81,9 +126,10 @@ spec:
 | `cmd/kuberoot-node` | сервер API ноды |
 | `cmd/kuberoot-installer` | консольный интерфейс установщика |
 | `cmd/kuberoot-intents` | переводит типизированные намерения в примитивы Kubernetes |
+| `cmd/kuberoot-router` | контроллер маршрутизатора |
 | `cmd/mkimage`, `cmd/kuberoot-release` | загрузочные носители и подписанные выпуски |
 | `pkg/` | библиотеки, на которых они построены |
-| `distros/edge` | профиль `edge`: службы, модули, пакеты |
+| `distros/edge`, `distros/router` | дистрибутивы: службы, модули, аддоны, пакеты |
 | `kernel/` | конфигурация и версии ядра |
 | `rootfs/` | файлы корневой системы |
 | `scripts/` | шаги сборки |

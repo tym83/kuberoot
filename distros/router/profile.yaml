@@ -1,0 +1,93 @@
+# The router distribution: Kubernetes without containers. The API server
+# keeps the router's configuration as router.kuberoot.dev resources, with
+# RBAC, audit and watch; kuberoot-router makes the node match them. There is
+# no kubelet, container runtime, kube-proxy or scheduler.
+apiVersion: kuberoot.dev/v1alpha1
+kind: Distribution
+metadata:
+  name: router
+spec:
+  sysctls:
+    net.ipv4.ip_forward: "1"
+    net.ipv6.conf.all.forwarding: "1"
+    # Loose reverse-path filtering: drop packets from sources no route
+    # leads back to, while asymmetric routes (BGP, several uplinks) work.
+    net.ipv4.conf.all.rp_filter: "2"
+  roles:
+    controlPlane:
+      generators: [node, cluster]
+      addons: true
+      services:
+      - name: kuberoot-node
+        args:
+        - /usr/bin/kuberoot-node
+        - --node-name={{.Node.Name}}
+        - --advertise-address={{.Node.IP}}
+        - --tls-cert-file={{pki "node-api.crt"}}
+        - --tls-private-key-file={{pki "node-api.key"}}
+        - --client-ca-file={{pki "node-client-ca.crt"}}
+        - --kubeconfigs=admin={{kube "admin.kubeconfig"}}
+        - --requestheader-client-ca-file={{pki "front-proxy-ca.crt"}}
+        - --cluster-tls-cert-file={{pki "node-api-cluster.crt"}}
+        - --cluster-tls-private-key-file={{pki "node-api-cluster.key"}}
+        - --cluster-kubeconfig={{kube "node-api-delegation.kubeconfig"}}
+        - --cluster-ca-file={{pki "ca.crt"}}
+        - --cluster-ca-key-file={{pki "ca.key"}}
+        - --admin-kubeconfig={{kube "admin.kubeconfig"}}
+        - --proxy-client-cert-file={{pki "node-api-proxy.crt"}}
+        - --proxy-client-key-file={{pki "node-api-proxy.key"}}
+        - --pod-cidr={{.Net.Pod}}
+        - --service-cidr={{.Net.Service}}
+      - name: kine
+        args:
+        - /usr/bin/kine
+        - --endpoint
+        # As on edge: writers wait for the lock; FULL sync survives power loss.
+        - sqlite:///var/lib/kine/state.db?_journal=WAL&_synchronous=FULL&cache=shared&_busy_timeout=30000&_txlock=immediate
+        - --listen-address
+        - unix:///run/kine/kine.sock
+      - name: kube-apiserver
+        args:
+        - /usr/bin/kube-apiserver
+        - --etcd-servers=unix:///run/kine/kine.sock
+        - --advertise-address={{.Node.IP}}
+        - --secure-port=6443
+        - --service-cluster-ip-range={{.Net.Service}}
+        - --client-ca-file={{pki "ca.crt"}}
+        - --tls-cert-file={{pki "apiserver.crt"}}
+        - --tls-private-key-file={{pki "apiserver.key"}}
+        - --service-account-issuer=https://kubernetes.default.svc.cluster.local
+        - --service-account-key-file={{pki "sa.pub"}}
+        - --service-account-signing-key-file={{pki "sa.key"}}
+        - --authorization-mode=RBAC
+        - --encryption-provider-config={{pki "encryption.yaml"}}
+        - --audit-policy-file={{kube "audit-policy.yaml"}}
+        - --audit-log-path=/var/log/kuberoot/audit.log
+        - --audit-log-maxsize=50
+        - --audit-log-maxbackup=3
+        - --requestheader-client-ca-file={{pki "front-proxy-ca.crt"}}
+        - --requestheader-allowed-names=front-proxy-client
+        - --requestheader-username-headers=X-Remote-User
+        - --requestheader-group-headers=X-Remote-Group
+        - --requestheader-extra-headers-prefix=X-Remote-Extra-
+        - --proxy-client-cert-file={{pki "front-proxy-client.crt"}}
+        - --proxy-client-key-file={{pki "front-proxy-client.key"}}
+        - --enable-aggregator-routing=true
+      # Garbage collection, namespaces and service account tokens.
+      - name: kube-controller-manager
+        after: apiserver
+        args:
+        - /usr/bin/kube-controller-manager
+        - --kubeconfig={{kube "controller-manager.kubeconfig"}}
+        - --authentication-kubeconfig={{kube "controller-manager.kubeconfig"}}
+        - --authorization-kubeconfig={{kube "controller-manager.kubeconfig"}}
+        - --root-ca-file={{pki "ca.crt"}}
+        - --service-account-private-key-file={{pki "sa.key"}}
+        - --use-service-account-credentials=true
+        - --controllers=garbagecollector,namespace,serviceaccount,serviceaccount-token,root-ca-cert-publisher,clusterrole-aggregation
+        - --leader-elect=false
+      - name: kuberoot-router
+        after: apiserver
+        args:
+        - /usr/bin/kuberoot-router
+        - --kubeconfig={{kube "admin.kubeconfig"}}
