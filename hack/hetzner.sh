@@ -48,7 +48,10 @@ case "${1:-}" in
   build)
     arch=${2:?arch required}
     prepare; sync
-    tools sh -c "[ -f /work/out/$arch/vmlinuz.efi ] || { $ENV $SRC/scripts/build-kernel.sh $arch && $ENV $SRC/scripts/build-drbd.sh $arch; }"
+    # The kernel is built again when the last one was another distribution's.
+    distro=${KUBEROOT_DISTRO:-edge}
+    flavour=base; [ -f "$ROOT/distros/$distro/kernel.config" ] && flavour=$distro
+    tools sh -c "[ -f /work/out/$arch/vmlinuz.efi ] && [ \"\$(cat /work/out/$arch/kernel.flavour 2>/dev/null || echo base)\" = $flavour ] || { $ENV KUBEROOT_DISTRO=$distro $SRC/scripts/build-kernel.sh $arch && $ENV KUBEROOT_DISTRO=$distro $SRC/scripts/build-drbd.sh $arch; }"
     tools sh -c "cd $SRC && $ENV scripts/build-binaries.sh $arch"
     if [ "${KUBEROOT_DISTRO:-edge}" = ai ]; then
       tools sh -c "$ENV $SRC/scripts/build-llama.sh $arch"

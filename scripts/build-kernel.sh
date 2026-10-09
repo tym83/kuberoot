@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Builds the kuberoot kernel. Runs in the builder (hack/hetzner.sh), natively for
-# its architecture; sources and objects stay in $WORK between builds.
+# its architecture; sources and objects stay in $WORK between builds. A
+# distribution with a kernel fragment of its own (distros/<name>/kernel.config,
+# picked by KUBEROOT_DISTRO) gets a kernel of its own, built apart.
+# JOBS bounds the compilers run at once; all CPUs by default.
 # Usage: scripts/build-kernel.sh <arch: amd64|arm64> [extra fragment...]
 set -euo pipefail
 
@@ -10,6 +13,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 WORK=${WORK:-/work}
 OUT=${KUBEROOT_OUT:-$ROOT/out}/$ARCH
 KVER=$(cat "$ROOT/kernel/VERSION")
+. "$ROOT/scripts/kernel-flavour.sh"
 
 case "$ARCH" in
   amd64) KARCH=x86_64; IMAGE=arch/x86/boot/bzImage ;;
@@ -23,18 +27,20 @@ if [ ! -d "linux-$KVER" ]; then
   curl -fsSL "https://cdn.kernel.org/pub/linux/kernel/v${KVER%%.*}.x/linux-$KVER.tar.xz" | tar -xJ
 fi
 cd "linux-$KVER"
-O="$WORK/build-$KARCH"
+O=$(kernel_build_dir "$WORK" "$KARCH")
 make -s ARCH=$KARCH O="$O" defconfig
 frags="$ROOT/kernel/base.config"
 for f in "$ARCH.config" "$@"; do [ -f "$ROOT/kernel/$f" ] && frags="$frags $ROOT/kernel/$f"; done
+[ -z "$KFLAVOUR" ] || frags="$frags $ROOT/distros/$KFLAVOUR/kernel.config"
 KCONFIG_CONFIG="$O/.config" scripts/kconfig/merge_config.sh -m -O "$O" "$O/.config" $frags >/dev/null
 make -s ARCH=$KARCH O="$O" olddefconfig
 # Modules are on only for out-of-tree drivers: everything defconfig would
 # build as a module is built in, as it was with modules off.
 sed -i 's/=m$/=y/' "$O/.config"
 make -s ARCH=$KARCH O="$O" olddefconfig
-make -s ARCH=$KARCH O="$O" -j"$(nproc)" "$(basename $IMAGE)" modules
+make -s ARCH=$KARCH O="$O" -j"${JOBS:-$(nproc)}" "$(basename $IMAGE)" modules
 grep -q "=m$" "$O/.config" && { echo "modules left in the kernel config:" >&2; grep "=m$" "$O/.config" >&2; exit 1; }
 cp "$O/$IMAGE" "$OUT/vmlinuz.efi"
 cp "$O/.config" "$OUT/kernel.config"
+echo "${KFLAVOUR:-base}" > "$OUT/kernel.flavour"
 echo "kernel: $OUT/vmlinuz.efi ($(du -h "$OUT/vmlinuz.efi" | cut -f1))"
