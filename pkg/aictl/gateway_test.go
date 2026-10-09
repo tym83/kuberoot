@@ -58,3 +58,29 @@ func TestGatewayRoutesByModel(t *testing.T) {
 		t.Fatalf("models: %s", list)
 	}
 }
+
+func TestGatewaySkipsUnreachableReplica(t *testing.T) {
+	a := backend("a")
+	defer a.Close()
+	dead := httptest.NewServer(http.NotFoundHandler())
+	deadAddr := strings.TrimPrefix(dead.URL, "http://")
+	dead.Close()
+	g := &Gateway{}
+	g.SetRoutes(map[string][]string{"qwen": {deadAddr, strings.TrimPrefix(a.URL, "http://")}})
+	gw := httptest.NewServer(g)
+	defer gw.Close()
+	for i := 0; i < 2; i++ {
+		resp, err := http.Post(gw.URL+"/v1/completions", "application/json", strings.NewReader(`{"model":"qwen"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK || !strings.HasPrefix(string(out), "a ") {
+			t.Fatalf("request %d: %d %q", i, resp.StatusCode, out)
+		}
+	}
+	if n := g.InFlight(deadAddr) + g.InFlight(strings.TrimPrefix(a.URL, "http://")); n != 0 {
+		t.Fatalf("%d requests still counted in flight", n)
+	}
+}

@@ -45,9 +45,14 @@ type Controller struct {
 	// Probe sends a trial request to a server; nil uses an HTTP request.
 	Probe func(ctx context.Context, address string, port int32, model string) error
 
-	mu     sync.Mutex
-	probes map[string]int // "<model>/<sha>" -> answered (>0) or failures in a row (<0)
+	mu       sync.Mutex
+	probes   map[string]int       // "<model>/<sha>" -> answered (>0) or failures in a row (<0)
+	draining map[string]time.Time // "<node>.<model>" -> taken out of the endpoint at
 }
+
+// MaxDrain bounds the wait for a replica's requests to end before it
+// changes version or leaves.
+var MaxDrain = 2 * time.Minute
 
 // Run reconciles every few seconds until ctx ends.
 func (c *Controller) Run(ctx context.Context) error {
@@ -182,14 +187,36 @@ func (c *Controller) reconcile(ctx context.Context) {
 		mine := servers[m.Name]
 		want, st := Rollout(*m, replicas, mine, c.probeResult(ctx, m, mine, byName, port), time.Now())
 		st.Port = port
-		c.apply(ctx, m, want, port, byName, mine)
+		// Replicas about to change version or to leave are taken out of the
+		// endpoint first, and changed once their requests are answered.
+		var backends []string
+		hold := map[string]bool{}
+		for node, s := range mine {
+			sha, stays := want[node]
+			backend := fmt.Sprintf("%s:%d", byName[node].Address, port)
+			if stays && sha == s.SHA256 {
+				c.drained(node + "." + m.Name)
+				if s.Phase == "Ready" && byName[node].Ready {
+					backends = append(backends, backend)
+				}
+				continue
+			}
+			if s.Phase == "Ready" && c.Gateway != nil && !c.drain(node+"."+m.Name, c.Gateway.InFlight(backend)) {
+				hold[node] = true
+			}
+		}
+		sort.Strings(backends)
+		routes[m.Name] = backends
+		if c.Gateway != nil {
+			c.Gateway.SetModelRoutes(m.Name, backends)
+		}
+		c.apply(ctx, m, want, port, byName, mine, hold)
 		ready := 0
 		for _, r := range replicas {
 			s := mine[r]
 			st.Replicas = append(st.Replicas, v1.Replica{Node: r, Address: byName[r].Address, SHA256: s.SHA256, Phase: s.Phase})
 			if s.Phase == "Ready" && byName[r].Ready {
 				ready++
-				routes[m.Name] = append(routes[m.Name], fmt.Sprintf("%s:%d", byName[r].Address, port))
 			}
 		}
 		if len(replicas) == 0 {
@@ -234,6 +261,30 @@ func (c *Controller) probeResult(ctx context.Context, m *v1.Model, mine map[stri
 	return n
 }
 
+// drain reports whether a replica out of the endpoint may change: its
+// requests answered, or waited for long enough.
+func (c *Controller) drain(key string, inFlight int) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.draining == nil {
+		c.draining = map[string]time.Time{}
+	}
+	since, ok := c.draining[key]
+	if !ok {
+		// Out of the endpoint from now: requests already sent to it may
+		// still be on their way.
+		c.draining[key] = time.Now()
+		return false
+	}
+	return inFlight == 0 || time.Since(since) > MaxDrain
+}
+
+func (c *Controller) drained(key string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.draining, key)
+}
+
 // probe asks the model a short question and wants an answer.
 func probe(ctx context.Context, address string, port int32, model string) error {
 	body, _ := json.Marshal(map[string]any{"model": model, "max_tokens": 8,
@@ -269,7 +320,7 @@ func probe(ctx context.Context, address string, port int32, model string) error 
 
 // apply makes each replica node run the version decided for it, and no
 // other node run the model.
-func (c *Controller) apply(ctx context.Context, m *v1.Model, want map[string]string, port int32, byName map[string]Node, mine map[string]Server) {
+func (c *Controller) apply(ctx context.Context, m *v1.Model, want map[string]string, port int32, byName map[string]Node, mine map[string]Server, hold map[string]bool) {
 	urls := map[string]string{m.Spec.Source.SHA256: m.Spec.Source.URL}
 	for _, s := range []*v1.Source{m.Status.Current, m.Status.Previous} {
 		if s != nil {
@@ -277,7 +328,7 @@ func (c *Controller) apply(ctx context.Context, m *v1.Model, want map[string]str
 		}
 	}
 	for node, sha := range want {
-		if !byName[node].Ready {
+		if !byName[node].Ready || hold[node] {
 			continue
 		}
 		spec := nodev1.ModelServerSpec{URL: urls[sha], SHA256: sha, Model: m.Name, Port: port,
@@ -287,7 +338,7 @@ func (c *Controller) apply(ctx context.Context, m *v1.Model, want map[string]str
 		}
 	}
 	for node := range mine {
-		if _, ok := want[node]; !ok && byName[node].Ready {
+		if _, ok := want[node]; !ok && byName[node].Ready && !hold[node] {
 			klog.Infof("%s: leaving %s", m.Name, node)
 			_ = c.Dynamic.Resource(serversGVR).Delete(ctx, node+"."+m.Name, metav1.DeleteOptions{})
 		}
