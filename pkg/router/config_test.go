@@ -9,42 +9,42 @@ import (
 	v1 "github.com/tym83/kuberoot/pkg/apis/router/v1alpha1"
 )
 
-func meta(name string) metav1.ObjectMeta { return metav1.ObjectMeta{Name: name} }
+func named(name string) metav1.ObjectMeta { return metav1.ObjectMeta{Name: name} }
 
 // gateway is a home router: WAN on eth0, LAN on eth1 with DHCP, NAT out of
 // the WAN, a port forwarded to a server, LAN may go out, WAN may not come in.
 func gateway() Config {
 	return Config{
 		Interfaces: []v1.Interface{
-			{ObjectMeta: meta("lan"), Spec: v1.InterfaceSpec{Link: "eth1", Addresses: []string{"192.168.10.1/24", "fd00:10::1/64"}}},
-			{ObjectMeta: meta("guests"), Spec: v1.InterfaceSpec{Link: "eth1.20", VLAN: &v1.VLAN{Parent: "eth1", ID: 20}, Addresses: []string{"192.168.20.1/24"}}},
+			{ObjectMeta: named("lan"), Spec: v1.InterfaceSpec{Link: "eth1", Addresses: []string{"192.168.10.1/24", "fd00:10::1/64"}}},
+			{ObjectMeta: named("guests"), Spec: v1.InterfaceSpec{Link: "eth1.20", VLAN: &v1.VLAN{Parent: "eth1", ID: 20}, Addresses: []string{"192.168.20.1/24"}}},
 		},
-		Routes: []v1.Route{{ObjectMeta: meta("lab"), Spec: v1.RouteSpec{Destination: "10.50.0.0/16", Gateway: "192.168.10.254"}}},
+		Routes: []v1.Route{{ObjectMeta: named("lab"), Spec: v1.RouteSpec{Destination: "10.50.0.0/16", Gateway: "192.168.10.254"}}},
 		NAT: []v1.NATRule{
-			{ObjectMeta: meta("out"), Spec: v1.NATRuleSpec{Masquerade: &v1.Masquerade{OutLink: "eth0", Sources: []string{"192.168.0.0/16"}}}},
-			{ObjectMeta: meta("web"), Spec: v1.NATRuleSpec{PortForward: &v1.PortForward{InLink: "eth0", Protocol: "tcp", Port: 8080, To: "192.168.10.5", ToPort: 80}}},
+			{ObjectMeta: named("out"), Spec: v1.NATRuleSpec{Masquerade: &v1.Masquerade{OutLink: "eth0", Sources: []string{"192.168.0.0/16"}}}},
+			{ObjectMeta: named("web"), Spec: v1.NATRuleSpec{PortForward: &v1.PortForward{InLink: "eth0", Protocol: "tcp", Port: 8080, To: "192.168.10.5", ToPort: 80}}},
 		},
 		Zones: []v1.FirewallZone{
-			{ObjectMeta: meta("wan"), Spec: v1.FirewallZoneSpec{Links: []string{"eth0"}, Input: "Drop", Management: true}},
-			{ObjectMeta: meta("lan"), Spec: v1.FirewallZoneSpec{Links: []string{"eth1"}, Input: "Accept", ForwardTo: []string{"wan"}}},
-			{ObjectMeta: meta("guests"), Spec: v1.FirewallZoneSpec{Links: []string{"eth1.20"}, Input: "Drop", ForwardTo: []string{"wan"}}},
+			{ObjectMeta: named("wan"), Spec: v1.FirewallZoneSpec{Links: []string{"eth0"}, Input: "Drop", Management: true}},
+			{ObjectMeta: named("lan"), Spec: v1.FirewallZoneSpec{Links: []string{"eth1"}, Input: "Accept", ForwardTo: []string{"wan"}}},
+			{ObjectMeta: named("guests"), Spec: v1.FirewallZoneSpec{Links: []string{"eth1.20"}, Input: "Drop", ForwardTo: []string{"wan"}}},
 		},
 		Rules: []v1.FirewallRule{
-			{ObjectMeta: meta("ssh-from-office"), Spec: v1.FirewallRuleSpec{From: "wan", To: "lan", Protocol: "tcp", Ports: []int32{22}, Sources: []string{"203.0.113.0/24"}, Action: "Accept"}},
-			{ObjectMeta: meta("no-printer"), Spec: v1.FirewallRuleSpec{Priority: -1, From: "guests", To: "self", Protocol: "any", Action: "Drop"}},
+			{ObjectMeta: named("ssh-from-office"), Spec: v1.FirewallRuleSpec{From: "wan", To: "lan", Protocol: "tcp", Ports: []int32{22}, Sources: []string{"203.0.113.0/24"}, Action: "Accept"}},
+			{ObjectMeta: named("no-printer"), Spec: v1.FirewallRuleSpec{Priority: -1, From: "guests", To: "self", Protocol: "any", Action: "Drop"}},
 		},
-		DHCP: []v1.DHCPServer{{ObjectMeta: meta("lan"), Spec: v1.DHCPServerSpec{Link: "eth1", RangeStart: "192.168.10.100", RangeEnd: "192.168.10.199",
+		DHCP: []v1.DHCPServer{{ObjectMeta: named("lan"), Spec: v1.DHCPServerSpec{Link: "eth1", RangeStart: "192.168.10.100", RangeEnd: "192.168.10.199",
 			Domain: "home.lan", StaticLeases: []v1.StaticLease{{MAC: "52:54:00:AA:BB:CC", Address: "192.168.10.5", Hostname: "server"}}}}},
 	}
 }
 
 func TestCheckKeepsValidResourcesAndNamesTheRest(t *testing.T) {
 	c := gateway()
-	c.Interfaces = append(c.Interfaces, v1.Interface{ObjectMeta: meta("dup"), Spec: v1.InterfaceSpec{Link: "eth1"}})
-	c.Routes = append(c.Routes, v1.Route{ObjectMeta: meta("mixed"), Spec: v1.RouteSpec{Destination: "10.0.0.0/8", Gateway: "fd00::1"}})
-	c.Rules = append(c.Rules, v1.FirewallRule{ObjectMeta: meta("typo"), Spec: v1.FirewallRuleSpec{From: "lna", To: "wan", Action: "Accept"}})
-	c.DHCP = append(c.DHCP, v1.DHCPServer{ObjectMeta: meta("outside"), Spec: v1.DHCPServerSpec{Link: "eth1.20", RangeStart: "192.168.10.2", RangeEnd: "192.168.10.9"}})
-	c.Peers = []v1.BGPPeer{{ObjectMeta: meta("upstream"), Spec: v1.BGPPeerSpec{Address: "10.0.0.1", ASN: 65001}}}
+	c.Interfaces = append(c.Interfaces, v1.Interface{ObjectMeta: named("dup"), Spec: v1.InterfaceSpec{Link: "eth1"}})
+	c.Routes = append(c.Routes, v1.Route{ObjectMeta: named("mixed"), Spec: v1.RouteSpec{Destination: "10.0.0.0/8", Gateway: "fd00::1"}})
+	c.Rules = append(c.Rules, v1.FirewallRule{ObjectMeta: named("typo"), Spec: v1.FirewallRuleSpec{From: "lna", To: "wan", Action: "Accept"}})
+	c.DHCP = append(c.DHCP, v1.DHCPServer{ObjectMeta: named("outside"), Spec: v1.DHCPServerSpec{Link: "eth1.20", RangeStart: "192.168.10.2", RangeEnd: "192.168.10.9"}})
+	c.Peers = []v1.BGPPeer{{ObjectMeta: named("upstream"), Spec: v1.BGPPeerSpec{Address: "10.0.0.1", ASN: 65001}}}
 
 	ok, problems := Check(c)
 	want := map[Ref]string{
@@ -140,10 +140,10 @@ func TestParseLeases(t *testing.T) {
 
 func TestBirdConfig(t *testing.T) {
 	c := Config{
-		BGP: []v1.BGPRouter{{ObjectMeta: meta("default"), Spec: v1.BGPRouterSpec{ASN: 65010, Announce: []string{"192.168.10.0/24", "fd00:10::/64"}, Import: "All"}}},
+		BGP: []v1.BGPRouter{{ObjectMeta: named("default"), Spec: v1.BGPRouterSpec{ASN: 65010, Announce: []string{"192.168.10.0/24", "fd00:10::/64"}, Import: "All"}}},
 		Peers: []v1.BGPPeer{
-			{ObjectMeta: meta("r2"), Spec: v1.BGPPeerSpec{Address: "10.244.0.20", ASN: 65020}},
-			{ObjectMeta: meta("upstream-v6"), Spec: v1.BGPPeerSpec{Address: "2001:db8::1", ASN: 64512, Multihop: 2}},
+			{ObjectMeta: named("r2"), Spec: v1.BGPPeerSpec{Address: "10.244.0.20", ASN: 65020}},
+			{ObjectMeta: named("upstream-v6"), Spec: v1.BGPPeerSpec{Address: "2001:db8::1", ASN: 64512, Multihop: 2}},
 		},
 	}
 	ok, problems := Check(c)

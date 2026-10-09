@@ -42,7 +42,9 @@ type InterfaceSpec struct {
 	// VLAN creates the link as a VLAN on a parent link.
 	// +optional
 	VLAN *VLAN `json:"vlan,omitempty"`
-	// Addresses in CIDR notation, IPv4 or IPv6. Others on the link are removed.
+	// Addresses in CIDR notation, IPv4 or IPv6. When set, the link has exactly
+	// these (and its IPv6 link-local address); when unset, the link's
+	// addresses are left as they are, as on an uplink configured by DHCP.
 	// +optional
 	Addresses []string `json:"addresses,omitempty"`
 	// MTU; the link's own when unset.

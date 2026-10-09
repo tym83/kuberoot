@@ -1,0 +1,3 @@
+# DHCP and DNS for the router's networks, and BGP.
+dnsmasq
+bird

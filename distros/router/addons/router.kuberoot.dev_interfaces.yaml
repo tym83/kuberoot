@@ -56,8 +56,10 @@ spec:
           spec:
             properties:
               addresses:
-                description: Addresses in CIDR notation, IPv4 or IPv6. Others on the
-                  link are removed.
+                description: |-
+                  Addresses in CIDR notation, IPv4 or IPv6. When set, the link has exactly
+                  these (and its IPv6 link-local address); when unset, the link's
+                  addresses are left as they are, as on an uplink configured by DHCP.
                 items:
                   type: string
                 type: array
