@@ -1,7 +1,8 @@
-# Image registry for images built in the cluster (hack/hetzner.sh image), so
+# Image registry for images built in the cluster, so
 # nodes pull them from here and nothing is published outside the cluster.
-# Pushes and pulls need the password in Secret kuberoot-registry-auth;
-# hack/hetzner.sh registry-auth creates it and the pull secrets.
+# Pushes and pulls need the password in Secret kuberoot-registry-auth.
+# REGISTRY_HOST is the registry's public name, under the tenant's domain:
+#   sed "s/REGISTRY_HOST/registry.example.org/" hack/hetzner/registry.yaml | kubectl apply -f -
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -73,10 +74,10 @@ metadata:
 spec:
   ingressClassName: tenant-root
   tls:
-  - hosts: [registry.kuberoot.workshop.aenix.io]
+  - hosts: [REGISTRY_HOST]
     secretName: registry-tls
   rules:
-  - host: registry.kuberoot.workshop.aenix.io
+  - host: REGISTRY_HOST
     http:
       paths:
       - path: /

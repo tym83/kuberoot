@@ -1,3 +1,7 @@
 /out/
 /.cache/
 out-*.log
+# Local working notes, not part of the project.
+/SESSION_LOG.md
+/BACKLOG.md
+/kubepkg-rc1-feedback.md
