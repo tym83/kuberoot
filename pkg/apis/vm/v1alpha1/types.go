@@ -58,7 +58,8 @@ type VirtualMachineSpec struct {
 	// +kubebuilder:default=3
 	// +kubebuilder:validation:Enum=1;3
 	Replicas int32 `json:"replicas,omitempty"`
-	// Node to run on, among the replicas; any when unset.
+	// Node to run on, among the replicas; any when unset. Changed while the
+	// machine runs, the machine moves there alive.
 	// +optional
 	Node string `json:"node,omitempty"`
 }
@@ -91,6 +92,19 @@ type VirtualMachineStatus struct {
 	ReplicaAddresses map[string]string `json:"replicaAddresses,omitempty"`
 	// ImageWritten: the disk holds its data; the image is never written again.
 	ImageWritten bool `json:"imageWritten,omitempty"`
+	// Migration is the machine moving alive to another node.
+	// +optional
+	Migration *Migration `json:"migration,omitempty"`
+	// FailedMigration names the node the last live move to failed for; it
+	// is not tried again until spec.node changes.
+	FailedMigration string `json:"failedMigration,omitempty"`
+}
+
+type Migration struct {
+	Target string `json:"target"`
+	// Phase: Preparing, Receiving, Sending.
+	Phase     string      `json:"phase"`
+	StartedAt metav1.Time `json:"startedAt"`
 }
 
 // +kubebuilder:object:root=true

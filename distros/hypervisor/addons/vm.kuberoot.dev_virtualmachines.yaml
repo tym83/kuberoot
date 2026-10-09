@@ -86,7 +86,9 @@ spec:
                 pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                 x-kubernetes-int-or-string: true
               node:
-                description: Node to run on, among the replicas; any when unset.
+                description: |-
+                  Node to run on, among the replicas; any when unset. Changed while the
+                  machine runs, the machine moves there alive.
                 type: string
               replicas:
                 default: 3
@@ -111,6 +113,11 @@ spec:
             properties:
               address:
                 type: string
+              failedMigration:
+                description: |-
+                  FailedMigration names the node the last live move to failed for; it
+                  is not tried again until spec.node changes.
+                type: string
               imageWritten:
                 description: 'ImageWritten: the disk holds its data; the image is
                   never written again.'
@@ -120,6 +127,22 @@ spec:
                 type: string
               message:
                 type: string
+              migration:
+                description: Migration is the machine moving alive to another node.
+                properties:
+                  phase:
+                    description: 'Phase: Preparing, Receiving, Sending.'
+                    type: string
+                  startedAt:
+                    format: date-time
+                    type: string
+                  target:
+                    type: string
+                required:
+                - phase
+                - startedAt
+                - target
+                type: object
               minor:
                 description: Minor and Port of its replicated disk.
                 format: int32

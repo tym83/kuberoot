@@ -58,3 +58,15 @@ func TestMachineArgs(t *testing.T) {
 		t.Error("tap name longer than a link name may be")
 	}
 }
+
+func TestTwoPrimariesOnlyWhileMoving(t *testing.T) {
+	v := &Volumes{Node: "a", Address: "10.0.0.1"}
+	s := node.VolumeSpec{Minor: 100, Port: 7800, Peers: []node.VolumePeer{{Node: "b", Address: "10.0.0.2", NodeID: 1}}}
+	if strings.Contains(v.ResConfig("web", s, "/dev/loop0"), "allow-two-primaries") {
+		t.Error("two primaries allowed outside a move")
+	}
+	s.AllowTwoPrimaries = true
+	if !strings.Contains(v.ResConfig("web", s, "/dev/loop0"), "allow-two-primaries yes;") {
+		t.Error("two primaries not allowed during a move")
+	}
+}

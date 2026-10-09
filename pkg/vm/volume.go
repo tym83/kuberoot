@@ -102,6 +102,11 @@ resource {{.Resource}} {
 	}
 	net {
 		protocol C;
+{{- if .TwoPrimaries}}
+		# A machine moves alive: for the moment it takes, both nodes hold
+		# the disk writable; only one of them runs the machine.
+		allow-two-primaries yes;
+{{- end}}
 	}
 	volume 0 {
 		device minor {{.Minor}};
@@ -128,7 +133,7 @@ func (v *Volumes) ResConfig(name string, s node.VolumeSpec, disk string) string 
 	sort.Slice(hosts, func(i, j int) bool { return hosts[i].NodeID < hosts[j].NodeID })
 	var b bytes.Buffer
 	_ = resTemplate.Execute(&b, map[string]any{"Name": name, "Resource": ResourceName(name), "Minor": s.Minor,
-		"Port": s.Port, "Disk": disk, "Hosts": hosts})
+		"Port": s.Port, "Disk": disk, "Hosts": hosts, "TwoPrimaries": s.AllowTwoPrimaries})
 	return b.String()
 }
 
