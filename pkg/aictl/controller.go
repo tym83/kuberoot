@@ -228,6 +228,7 @@ func (c *Controller) reconcile(ctx context.Context) {
 	if c.Gateway != nil {
 		c.Gateway.SetRoutes(routes)
 	}
+	c.remedies(ctx, nodes)
 }
 
 // probeResult tries a new version on its first node once it is ready

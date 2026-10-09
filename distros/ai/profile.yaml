@@ -131,6 +131,13 @@ spec:
         - /usr/bin/kuberoot-aictl
         - --kubeconfig={{kube "admin.kubeconfig"}}
         - --listen=:8000
+      # The operator agent: proposes remedies, with credentials that can do
+      # nothing else; kuberoot-aictl runs the approved ones.
+      - name: kuberoot-agent
+        after: apiserver
+        args:
+        - /usr/bin/kuberoot-agent
+        - --kubeconfig={{kube "agent.kubeconfig"}}
 
     worker:
       generators: [node, member, containers, kubelet]
