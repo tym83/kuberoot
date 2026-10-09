@@ -4,7 +4,7 @@
 
 kuberoot builds Kubernetes distributions that boot straight on hardware. Each one is a single image with its own Linux kernel, a small init that brings up Kubernetes, and a node that is managed through the Kubernetes API itself: there is no SSH, no shell and no separate node tool, `kubectl` reaches the node. Everything above the base is a [kubepkg](https://github.com/tym83/kubepkg) package, so a distribution is a base plus a meta package, the way a Linux distribution is a kernel plus packages.
 
-The repository builds three distributions: `edge`, a general-purpose cluster for one to a few nodes; `router`, Kubernetes without containers that runs a network router; and `hypervisor`, virtual machines on KVM with their disks replicated between nodes, moved off a node that fails.
+The repository builds four distributions: `edge`, a general-purpose cluster for one to a few nodes; `router`, Kubernetes without containers that runs a network router; `hypervisor`, virtual machines on KVM with their disks replicated between nodes, moved off a node that fails; and `ai`, language models served as processes of the nodes behind one OpenAI-compatible endpoint, with new versions rolled out and back by the cluster.
 
 > Status: experimental. The `edge` distribution passes the Kubernetes conformance suite (462 of 462 on a three-node cluster, Kubernetes 1.37.1), but the API of the node and the layout of the state may still change.
 
@@ -82,6 +82,29 @@ A running machine moves to another node alive when its `spec.node` changes to an
 
 Each node serves its part through the node API: `volumes` (the disks on it, with their DRBD role and state), `machines` (the machines it runs) and `machines/console` (a machine's serial console). The kubelet stays for what the cluster knows of its nodes, their registration and heartbeat; no pods run.
 
+## The ai distribution
+
+`ai` serves language models with no pods and no container images: each node runs llama-server, built into the image as one static binary for the CPU, as a process of its own. A model is a resource of the cluster:
+
+```yaml
+apiVersion: ai.kuberoot.dev/v1alpha1
+kind: Model
+metadata: {name: qwen}
+spec:
+  replicas: 3
+  contextSize: 4096
+  parallel: 2
+  source:
+    url: https://example.org/models/qwen2.5-0.5b-instruct-q4_k_m.gguf
+    sha256: 74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db
+```
+
+`kuberoot-aictl`, on the control plane, places the model on as many nodes as it has replicas. Each node downloads the weights, uses them only if they match their hash, and starts the server. The control plane serves every model at one OpenAI-compatible endpoint, port 8000: `/v1/models`, and `/v1/chat/completions` and the other `/v1` calls, routed by the model the request names to its ready replicas in turn, with streamed answers passed through as they come. The endpoint has no authentication of its own yet: it is meant for a network the cluster trusts.
+
+A new `spec.source` is a new version. It goes to one node first; once it is ready there and answers a trial request, the other nodes take it one at a time, each after the one before serves it, so the model never loses more than one replica to the change. A version that fails to start on the first node, is not ready there in fifteen minutes, or does not answer, is rolled back: every node stays on the version before, and `status.failedSHA256` keeps it from being tried again until `spec.source` changes. `status.previous` is the version before the current one; its weights stay on the nodes, and setting `spec.source` back to it rolls the model back at once.
+
+Each node serves its part through the node API: `modelservers` (the models it serves, their phase and the weights they run) and `modelservers/log` (the server's output).
+
 ## Node API
 
 | Resource | What it does |
@@ -95,6 +118,7 @@ Each node serves its part through the node API: `volumes` (the disks on it, with
 | `memberships`, `jointickets` | joins nodes to a cluster |
 | `statebackups` | the control plane's state archives |
 | `volumes`, `machines` | virtual machines' disks and machines (hypervisor) |
+| `modelservers` | the language models the node serves (ai) |
 
 ## Installing and upgrading
 
@@ -150,6 +174,7 @@ The node comes back as the same node, with the same name, certificates and clust
 | `cmd/kuberoot-intents` | lowers typed intents to Kubernetes primitives |
 | `cmd/kuberoot-router` | the router controller |
 | `cmd/kuberoot-vmctl` | the virtual machines controller |
+| `cmd/kuberoot-aictl` | the models controller and endpoint |
 | `cmd/mkimage`, `cmd/kuberoot-release` | boot media and signed releases |
 | `pkg/` | the libraries behind them |
 | `distros/` | the distributions: services, modules, add-ons, packages |
