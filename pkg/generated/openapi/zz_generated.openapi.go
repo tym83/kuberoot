@@ -35,6 +35,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.BootEntryList":       schema_pkg_apis_node_v1alpha1_BootEntryList(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.BootEntrySpec":       schema_pkg_apis_node_v1alpha1_BootEntrySpec(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.BootEntryStatus":     schema_pkg_apis_node_v1alpha1_BootEntryStatus(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.CPULatency":          schema_pkg_apis_node_v1alpha1_CPULatency(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Disk":                schema_pkg_apis_node_v1alpha1_Disk(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.DiskList":            schema_pkg_apis_node_v1alpha1_DiskList(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.DiskPartition":       schema_pkg_apis_node_v1alpha1_DiskPartition(ref),
@@ -50,6 +51,10 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.JoinTicketStatus":    schema_pkg_apis_node_v1alpha1_JoinTicketStatus(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Kubeconfig":          schema_pkg_apis_node_v1alpha1_Kubeconfig(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.KubeconfigList":      schema_pkg_apis_node_v1alpha1_KubeconfigList(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.LatencyTest":         schema_pkg_apis_node_v1alpha1_LatencyTest(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.LatencyTestList":     schema_pkg_apis_node_v1alpha1_LatencyTestList(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.LatencyTestSpec":     schema_pkg_apis_node_v1alpha1_LatencyTestSpec(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.LatencyTestStatus":   schema_pkg_apis_node_v1alpha1_LatencyTestStatus(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Machine":             schema_pkg_apis_node_v1alpha1_Machine(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.MachineList":         schema_pkg_apis_node_v1alpha1_MachineList(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.MachineSpec":         schema_pkg_apis_node_v1alpha1_MachineSpec(ref),
@@ -296,6 +301,69 @@ func schema_pkg_apis_node_v1alpha1_BootEntryStatus(ref common.ReferenceCallback)
 						},
 					},
 				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_CPULatency(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "CPULatency is what one CPU's measuring thread saw.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"cpu": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int32",
+						},
+					},
+					"samples": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int64",
+						},
+					},
+					"minMicroseconds": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int64",
+						},
+					},
+					"avgMicroseconds": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int64",
+						},
+					},
+					"maxMicroseconds": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int64",
+						},
+					},
+					"p99Microseconds": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int64",
+						},
+					},
+					"p9999Microseconds": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int64",
+						},
+					},
+				},
+				Required: []string{"cpu", "samples", "minMicroseconds", "avgMicroseconds", "maxMicroseconds", "p99Microseconds", "p9999Microseconds"},
 			},
 		},
 	}
@@ -929,6 +997,215 @@ func schema_pkg_apis_node_v1alpha1_KubeconfigList(ref common.ReferenceCallback) 
 		},
 		Dependencies: []string{
 			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Kubeconfig", v1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_LatencyTest(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "LatencyTest measures how late the node wakes a real-time task: cyclictest runs a thread at a real-time priority on each CPU asked for, wakes it at a fixed interval, and records how long after the due time it ran.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.LatencyTestSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.LatencyTestStatus"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.LatencyTestSpec", "github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.LatencyTestStatus", v1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_LatencyTestList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.LatencyTest"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.LatencyTest", v1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_LatencyTestSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"durationSeconds": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DurationSeconds the test runs; 60 when 0.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"cpus": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CPUs to measure, as a list like 2-3; the CPUs kept for real-time work (those without a timer tick) when empty, or all CPUs if none is.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"priority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Priority of the measuring threads, SCHED_FIFO; 95 when 0.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"intervalMicroseconds": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IntervalMicroseconds between wake-ups; 1000 when 0.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_LatencyTestStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"phase": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Phase: Pending, Running, Succeeded or Failed.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"message": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"startedAt": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref(v1.Time{}.OpenAPIModelName()),
+						},
+					},
+					"finishedAt": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref(v1.Time{}.OpenAPIModelName()),
+						},
+					},
+					"kernel": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kernel the test ran on, and whether it is fully preemptible.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"cpus": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Results per CPU, then the worst of them: latencies in microseconds.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.CPULatency"),
+									},
+								},
+							},
+						},
+					},
+					"maxMicroseconds": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int64",
+						},
+					},
+					"p99Microseconds": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int64",
+						},
+					},
+					"p9999Microseconds": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int64",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.CPULatency", v1.Time{}.OpenAPIModelName()},
 	}
 }
 
