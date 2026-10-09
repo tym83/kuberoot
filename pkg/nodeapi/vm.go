@@ -2,10 +2,8 @@ package nodeapi
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
-	"sync"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -22,40 +20,16 @@ import (
 )
 
 // vmHost is the node's virtual machines: their volumes and the machines,
-// kept on disk and made to match their specs every few seconds. Each object
-// has a lock of its own: a long step on one (an image downloading, a machine
-// shutting down) holds no other back.
+// kept on disk and made to match their specs every few seconds.
 type vmHost struct {
+	*objects
 	volumes  *vm.Volumes
 	machines *vm.Machines
-	locks    sync.Map // "volume/<name>" or "machine/<name>" -> *sync.Mutex
-	errsMu   sync.Mutex
-	errs     map[string]string
-	// poke asks for a pass right away, after a change.
-	poke chan struct{}
-}
-
-func (h *vmHost) lock(key string) *sync.Mutex {
-	l, _ := h.locks.LoadOrStore(key, &sync.Mutex{})
-	return l.(*sync.Mutex)
-}
-
-func (h *vmHost) changed() {
-	select {
-	case h.poke <- struct{}{}:
-	default:
-	}
-}
-
-func (h *vmHost) errOf(key string) string {
-	h.errsMu.Lock()
-	defer h.errsMu.Unlock()
-	return h.errs[key]
 }
 
 func newVMHost(nodeName, address string) *vmHost {
 	v := &vm.Volumes{Node: nodeName, Address: address}
-	return &vmHost{volumes: v, machines: &vm.Machines{Volumes: v}, errs: map[string]string{}, poke: make(chan struct{}, 1)}
+	return &vmHost{objects: newObjects(), volumes: v, machines: &vm.Machines{Volumes: v}}
 }
 
 // run applies every volume and every machine, each on its own, skipping
@@ -89,35 +63,6 @@ func (h *vmHost) run(ctx context.Context) {
 		case <-h.poke:
 		case <-time.After(10 * time.Second):
 		}
-	}
-}
-
-// async runs step for an object unless a step for it is still running.
-func (h *vmHost) async(key string, step func() error) {
-	l := h.lock(key)
-	if !l.TryLock() {
-		return
-	}
-	go func() {
-		defer l.Unlock()
-		err := step()
-		if errors.Is(err, vm.ErrWaiting) {
-			err = nil // not a failure: the next pass tries again
-		}
-		h.setErr(key, err)
-	}()
-}
-
-func (h *vmHost) setErr(key string, err error) {
-	h.errsMu.Lock()
-	defer h.errsMu.Unlock()
-	if err != nil {
-		if h.errs[key] != err.Error() {
-			klog.Errorf("%s: %v", key, err)
-		}
-		h.errs[key] = err.Error()
-	} else {
-		delete(h.errs, key)
 	}
 }
 

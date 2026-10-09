@@ -58,6 +58,10 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.MembershipList":      schema_pkg_apis_node_v1alpha1_MembershipList(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.MembershipSpec":      schema_pkg_apis_node_v1alpha1_MembershipSpec(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.MembershipStatus":    schema_pkg_apis_node_v1alpha1_MembershipStatus(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.ModelServer":         schema_pkg_apis_node_v1alpha1_ModelServer(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.ModelServerList":     schema_pkg_apis_node_v1alpha1_ModelServerList(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.ModelServerSpec":     schema_pkg_apis_node_v1alpha1_ModelServerSpec(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.ModelServerStatus":   schema_pkg_apis_node_v1alpha1_ModelServerStatus(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.NodeService":         schema_pkg_apis_node_v1alpha1_NodeService(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.NodeServiceList":     schema_pkg_apis_node_v1alpha1_NodeServiceList(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.NodeServiceSpec":     schema_pkg_apis_node_v1alpha1_NodeServiceSpec(ref),
@@ -1332,6 +1336,216 @@ func schema_pkg_apis_node_v1alpha1_MembershipStatus(ref common.ReferenceCallback
 				},
 			},
 		},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_ModelServer(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ModelServer is a language model this node serves, run by llama-server as a process of the node: no pod, no container image.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.ModelServerSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.ModelServerStatus"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.ModelServerSpec", "github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.ModelServerStatus", v1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_ModelServerList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.ModelServer"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.ModelServer", v1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_ModelServerSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"url": {
+						SchemaProps: spec.SchemaProps{
+							Description: "URL of the model's weights, a GGUF file, and their SHA-256: the weights are used only when they match it.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"sha256": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"model": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Model is the name clients ask for.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"port": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Port the server listens on, on every address of the node.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"contextSize": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ContextSize in tokens, shared by the Parallel requests served at once.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"parallel": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int32",
+						},
+					},
+					"threads": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Threads for generation; all the node's CPUs when 0.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+				Required: []string{"url", "sha256", "model", "port"},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_ModelServerStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"phase": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Phase: Downloading, Loading, Ready or Failed.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"message": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"pid": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int32",
+						},
+					},
+					"sha256": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SHA256 of the weights the running server has loaded.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"downloaded": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Downloaded bytes of the weights, while they download.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"startedAt": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref(v1.Time{}.OpenAPIModelName()),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			v1.Time{}.OpenAPIModelName()},
 	}
 }
 

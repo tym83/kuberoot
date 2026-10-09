@@ -484,3 +484,51 @@ type MachineList struct {
 
 	Items []Machine `json:"items"`
 }
+
+// ModelServer is a language model this node serves, run by llama-server as
+// a process of the node: no pod, no container image.
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +genclient:nonNamespaced
+type ModelServer struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   ModelServerSpec   `json:"spec,omitempty"`
+	Status ModelServerStatus `json:"status,omitempty"`
+}
+
+type ModelServerSpec struct {
+	// URL of the model's weights, a GGUF file, and their SHA-256: the
+	// weights are used only when they match it.
+	URL    string `json:"url"`
+	SHA256 string `json:"sha256"`
+	// Model is the name clients ask for.
+	Model string `json:"model"`
+	// Port the server listens on, on every address of the node.
+	Port int32 `json:"port"`
+	// ContextSize in tokens, shared by the Parallel requests served at once.
+	ContextSize int32 `json:"contextSize,omitempty"`
+	Parallel    int32 `json:"parallel,omitempty"`
+	// Threads for generation; all the node's CPUs when 0.
+	Threads int32 `json:"threads,omitempty"`
+}
+
+type ModelServerStatus struct {
+	// Phase: Downloading, Loading, Ready or Failed.
+	Phase   string `json:"phase,omitempty"`
+	Message string `json:"message,omitempty"`
+	PID     int32  `json:"pid,omitempty"`
+	// SHA256 of the weights the running server has loaded.
+	SHA256 string `json:"sha256,omitempty"`
+	// Downloaded bytes of the weights, while they download.
+	Downloaded int64        `json:"downloaded,omitempty"`
+	StartedAt  *metav1.Time `json:"startedAt,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type ModelServerList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []ModelServer `json:"items"`
+}
