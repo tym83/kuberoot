@@ -75,6 +75,11 @@ type Options struct {
 	// Resources the distribution serves; empty serves all.
 	Resources []string
 
+	// Machines: the node runs virtual machines (volumes and machines
+	// resources), on a network joined to the nodes VMNetworkKubeconfig lists.
+	Machines            bool
+	VMNetworkKubeconfig string
+
 	// RoutesKubeconfig reads the nodes to route pod subnets between them.
 	RoutesKubeconfig string
 }
@@ -126,6 +131,11 @@ func Run(ctx context.Context, o Options) error {
 	}
 	kinit := supervisor.NewClient()
 	storages := enabledResources(o.Resources, resourceDeps{nodeName: o.NodeName, kinit: kinit})
+	var vms *vmHost
+	if o.Machines {
+		vms = newVMHost(o.NodeName, o.Advertise)
+		storages["volumes"], storages["machines"] = volumeStorage{vms}, machineStorage{vms}
+	}
 	logs := &logStorage{kinit: kinit}
 	resources := map[string]rest.Storage{
 		"kubeconfigs": &kubeconfigStorage{files: o.Kubeconfig},
@@ -174,6 +184,12 @@ func Run(ctx context.Context, o Options) error {
 		return err
 	}
 	go assessBoot(ctx, kinit, o.NodeName)
+	if vms != nil {
+		go vms.run(ctx)
+		if o.VMNetworkKubeconfig != "" {
+			go vms.runNetwork(ctx, o.VMNetworkKubeconfig, net.ParseIP(o.Advertise))
+		}
+	}
 	if o.RoutesKubeconfig != "" {
 		_, podRange, _ := net.ParseCIDR(o.PodCIDR)
 		if o.PodNetwork != PodNetworkNone {

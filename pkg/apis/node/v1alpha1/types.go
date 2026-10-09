@@ -373,3 +373,101 @@ type StateBackupList struct {
 
 	Items []StateBackup `json:"items"`
 }
+
+// Volume is a disk for virtual machines on this node: a file, replicated
+// with DRBD to the same volume on other nodes when peers are given. The
+// node it runs on is its primary.
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +genclient:nonNamespaced
+type Volume struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   VolumeSpec   `json:"spec,omitempty"`
+	Status VolumeStatus `json:"status,omitempty"`
+}
+
+type VolumeSpec struct {
+	SizeBytes int64 `json:"sizeBytes"`
+	// Minor of the DRBD device, /dev/drbd<minor>, and its port; the same on
+	// every node of the volume.
+	Minor int32 `json:"minor"`
+	Port  int32 `json:"port"`
+	// NodeID of this node in the volume, unique among its peers.
+	NodeID int32 `json:"nodeID"`
+	// Peers are the volume on the other nodes.
+	Peers []VolumePeer `json:"peers,omitempty"`
+	// Primary: this node writes to the volume (runs the machine using it).
+	Primary bool `json:"primary,omitempty"`
+	// Image is written onto the volume when it is created, here: a URL of a
+	// qcow2 or raw disk image. Only one node of a volume gets an image.
+	Image string `json:"image,omitempty"`
+}
+
+type VolumePeer struct {
+	Node    string `json:"node"`
+	Address string `json:"address"`
+	NodeID  int32  `json:"nodeID"`
+}
+
+type VolumeStatus struct {
+	// Phase: Creating, Ready or Failed.
+	Phase   string `json:"phase,omitempty"`
+	Message string `json:"message,omitempty"`
+	// Device to give a machine, such as /dev/drbd100.
+	Device string `json:"device,omitempty"`
+	// Role (Primary, Secondary) and DiskState (UpToDate, Inconsistent...) as DRBD reports them.
+	Role      string `json:"role,omitempty"`
+	DiskState string `json:"diskState,omitempty"`
+	// Quorum: this node may write.
+	Quorum bool `json:"quorum,omitempty"`
+	// PeerStates: the connection to each peer.
+	PeerStates map[string]string `json:"peerStates,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type VolumeList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []Volume `json:"items"`
+}
+
+// Machine is a virtual machine on this node, run by cloud-hypervisor on KVM
+// with no pod and no libvirt.
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +genclient:nonNamespaced
+type Machine struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   MachineSpec   `json:"spec,omitempty"`
+	Status MachineStatus `json:"status,omitempty"`
+}
+
+type MachineSpec struct {
+	CPUs      int32 `json:"cpus"`
+	MemoryMiB int64 `json:"memoryMiB"`
+	// Volumes on this node, by name, as the machine's disks in order.
+	Volumes []string `json:"volumes"`
+	// MAC of the machine's network interface on the machines' network.
+	MAC string `json:"mac,omitempty"`
+	// Running: the machine is started when true and shut down when false.
+	Running bool `json:"running"`
+}
+
+type MachineStatus struct {
+	// Phase: Running, Stopped or Failed.
+	Phase     string       `json:"phase,omitempty"`
+	Message   string       `json:"message,omitempty"`
+	PID       int32        `json:"pid,omitempty"`
+	StartedAt *metav1.Time `json:"startedAt,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type MachineList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []Machine `json:"items"`
+}

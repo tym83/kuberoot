@@ -38,6 +38,8 @@ func main() {
 	flag.StringVar(&o.ProxyClientKey, "proxy-client-key-file", "", "key of the proxy identity")
 	flag.StringVar(&o.ProxyTrustCA, "proxy-trust-ca-file", "", "CA of the control plane proxy identity (member node)")
 	flag.StringVar(&o.RoutesKubeconfig, "routes-kubeconfig", "", "credentials to read nodes and route pod subnets between them")
+	flag.BoolVar(&o.Machines, "machines", false, "run virtual machines: serve the volumes and machines resources")
+	flag.StringVar(&o.VMNetworkKubeconfig, "vm-network-kubeconfig", "", "credentials to read nodes and join the machines' network to them")
 	flag.StringVar(&o.PodCIDR, "pod-cidr", "", "pod address range of the cluster (control plane node)")
 	flag.StringVar(&o.PodNetwork, "pod-network", nodeapi.PodNetworkVXLAN, "how pod traffic crosses between nodes: vxlan, host-gw on a plain layer-2 network, or none when a CNI package provides it")
 	flag.StringVar(&o.ServiceCIDR, "service-cidr", "", "service address range of the cluster (control plane node)")

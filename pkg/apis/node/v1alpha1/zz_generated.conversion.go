@@ -226,6 +226,46 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
+	if err := s.AddGeneratedConversionFunc((*Machine)(nil), (*node.Machine)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_Machine_To_node_Machine(a.(*Machine), b.(*node.Machine), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.Machine)(nil), (*Machine)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_Machine_To_v1alpha1_Machine(a.(*node.Machine), b.(*Machine), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*MachineList)(nil), (*node.MachineList)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_MachineList_To_node_MachineList(a.(*MachineList), b.(*node.MachineList), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.MachineList)(nil), (*MachineList)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_MachineList_To_v1alpha1_MachineList(a.(*node.MachineList), b.(*MachineList), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*MachineSpec)(nil), (*node.MachineSpec)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_MachineSpec_To_node_MachineSpec(a.(*MachineSpec), b.(*node.MachineSpec), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.MachineSpec)(nil), (*MachineSpec)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_MachineSpec_To_v1alpha1_MachineSpec(a.(*node.MachineSpec), b.(*MachineSpec), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*MachineStatus)(nil), (*node.MachineStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_MachineStatus_To_node_MachineStatus(a.(*MachineStatus), b.(*node.MachineStatus), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.MachineStatus)(nil), (*MachineStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_MachineStatus_To_v1alpha1_MachineStatus(a.(*node.MachineStatus), b.(*MachineStatus), scope)
+	}); err != nil {
+		return err
+	}
 	if err := s.AddGeneratedConversionFunc((*Membership)(nil), (*node.Membership)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1alpha1_Membership_To_node_Membership(a.(*Membership), b.(*node.Membership), scope)
 	}); err != nil {
@@ -413,6 +453,56 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}
 	if err := s.AddGeneratedConversionFunc((*node.UpgradeStatus)(nil), (*UpgradeStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_node_UpgradeStatus_To_v1alpha1_UpgradeStatus(a.(*node.UpgradeStatus), b.(*UpgradeStatus), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*Volume)(nil), (*node.Volume)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_Volume_To_node_Volume(a.(*Volume), b.(*node.Volume), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.Volume)(nil), (*Volume)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_Volume_To_v1alpha1_Volume(a.(*node.Volume), b.(*Volume), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*VolumeList)(nil), (*node.VolumeList)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_VolumeList_To_node_VolumeList(a.(*VolumeList), b.(*node.VolumeList), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.VolumeList)(nil), (*VolumeList)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_VolumeList_To_v1alpha1_VolumeList(a.(*node.VolumeList), b.(*VolumeList), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*VolumePeer)(nil), (*node.VolumePeer)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_VolumePeer_To_node_VolumePeer(a.(*VolumePeer), b.(*node.VolumePeer), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.VolumePeer)(nil), (*VolumePeer)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_VolumePeer_To_v1alpha1_VolumePeer(a.(*node.VolumePeer), b.(*VolumePeer), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*VolumeSpec)(nil), (*node.VolumeSpec)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_VolumeSpec_To_node_VolumeSpec(a.(*VolumeSpec), b.(*node.VolumeSpec), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.VolumeSpec)(nil), (*VolumeSpec)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_VolumeSpec_To_v1alpha1_VolumeSpec(a.(*node.VolumeSpec), b.(*VolumeSpec), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*VolumeStatus)(nil), (*node.VolumeStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_VolumeStatus_To_node_VolumeStatus(a.(*VolumeStatus), b.(*node.VolumeStatus), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*node.VolumeStatus)(nil), (*VolumeStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_node_VolumeStatus_To_v1alpha1_VolumeStatus(a.(*node.VolumeStatus), b.(*VolumeStatus), scope)
 	}); err != nil {
 		return err
 	}
@@ -853,6 +943,100 @@ func autoConvert_node_KubeconfigList_To_v1alpha1_KubeconfigList(in *node.Kubecon
 // Convert_node_KubeconfigList_To_v1alpha1_KubeconfigList is an autogenerated conversion function.
 func Convert_node_KubeconfigList_To_v1alpha1_KubeconfigList(in *node.KubeconfigList, out *KubeconfigList, s conversion.Scope) error {
 	return autoConvert_node_KubeconfigList_To_v1alpha1_KubeconfigList(in, out, s)
+}
+
+func autoConvert_v1alpha1_Machine_To_node_Machine(in *Machine, out *node.Machine, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
+	if err := Convert_v1alpha1_MachineSpec_To_node_MachineSpec(&in.Spec, &out.Spec, s); err != nil {
+		return err
+	}
+	if err := Convert_v1alpha1_MachineStatus_To_node_MachineStatus(&in.Status, &out.Status, s); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Convert_v1alpha1_Machine_To_node_Machine is an autogenerated conversion function.
+func Convert_v1alpha1_Machine_To_node_Machine(in *Machine, out *node.Machine, s conversion.Scope) error {
+	return autoConvert_v1alpha1_Machine_To_node_Machine(in, out, s)
+}
+
+func autoConvert_node_Machine_To_v1alpha1_Machine(in *node.Machine, out *Machine, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
+	if err := Convert_node_MachineSpec_To_v1alpha1_MachineSpec(&in.Spec, &out.Spec, s); err != nil {
+		return err
+	}
+	if err := Convert_node_MachineStatus_To_v1alpha1_MachineStatus(&in.Status, &out.Status, s); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Convert_node_Machine_To_v1alpha1_Machine is an autogenerated conversion function.
+func Convert_node_Machine_To_v1alpha1_Machine(in *node.Machine, out *Machine, s conversion.Scope) error {
+	return autoConvert_node_Machine_To_v1alpha1_Machine(in, out, s)
+}
+
+func autoConvert_v1alpha1_MachineList_To_node_MachineList(in *MachineList, out *node.MachineList, s conversion.Scope) error {
+	out.ListMeta = in.ListMeta
+	out.Items = *(*[]node.Machine)(unsafe.Pointer(&in.Items))
+	return nil
+}
+
+// Convert_v1alpha1_MachineList_To_node_MachineList is an autogenerated conversion function.
+func Convert_v1alpha1_MachineList_To_node_MachineList(in *MachineList, out *node.MachineList, s conversion.Scope) error {
+	return autoConvert_v1alpha1_MachineList_To_node_MachineList(in, out, s)
+}
+
+func autoConvert_node_MachineList_To_v1alpha1_MachineList(in *node.MachineList, out *MachineList, s conversion.Scope) error {
+	out.ListMeta = in.ListMeta
+	out.Items = *(*[]Machine)(unsafe.Pointer(&in.Items))
+	return nil
+}
+
+// Convert_node_MachineList_To_v1alpha1_MachineList is an autogenerated conversion function.
+func Convert_node_MachineList_To_v1alpha1_MachineList(in *node.MachineList, out *MachineList, s conversion.Scope) error {
+	return autoConvert_node_MachineList_To_v1alpha1_MachineList(in, out, s)
+}
+
+func autoConvert_v1alpha1_MachineSpec_To_node_MachineSpec(in *MachineSpec, out *node.MachineSpec, s conversion.Scope) error {
+	*out = *(*node.MachineSpec)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_v1alpha1_MachineSpec_To_node_MachineSpec is an autogenerated conversion function.
+func Convert_v1alpha1_MachineSpec_To_node_MachineSpec(in *MachineSpec, out *node.MachineSpec, s conversion.Scope) error {
+	return autoConvert_v1alpha1_MachineSpec_To_node_MachineSpec(in, out, s)
+}
+
+func autoConvert_node_MachineSpec_To_v1alpha1_MachineSpec(in *node.MachineSpec, out *MachineSpec, s conversion.Scope) error {
+	*out = *(*MachineSpec)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_node_MachineSpec_To_v1alpha1_MachineSpec is an autogenerated conversion function.
+func Convert_node_MachineSpec_To_v1alpha1_MachineSpec(in *node.MachineSpec, out *MachineSpec, s conversion.Scope) error {
+	return autoConvert_node_MachineSpec_To_v1alpha1_MachineSpec(in, out, s)
+}
+
+func autoConvert_v1alpha1_MachineStatus_To_node_MachineStatus(in *MachineStatus, out *node.MachineStatus, s conversion.Scope) error {
+	*out = *(*node.MachineStatus)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_v1alpha1_MachineStatus_To_node_MachineStatus is an autogenerated conversion function.
+func Convert_v1alpha1_MachineStatus_To_node_MachineStatus(in *MachineStatus, out *node.MachineStatus, s conversion.Scope) error {
+	return autoConvert_v1alpha1_MachineStatus_To_node_MachineStatus(in, out, s)
+}
+
+func autoConvert_node_MachineStatus_To_v1alpha1_MachineStatus(in *node.MachineStatus, out *MachineStatus, s conversion.Scope) error {
+	*out = *(*MachineStatus)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_node_MachineStatus_To_v1alpha1_MachineStatus is an autogenerated conversion function.
+func Convert_node_MachineStatus_To_v1alpha1_MachineStatus(in *node.MachineStatus, out *MachineStatus, s conversion.Scope) error {
+	return autoConvert_node_MachineStatus_To_v1alpha1_MachineStatus(in, out, s)
 }
 
 func autoConvert_v1alpha1_Membership_To_node_Membership(in *Membership, out *node.Membership, s conversion.Scope) error {
@@ -1297,4 +1481,118 @@ func autoConvert_node_UpgradeStatus_To_v1alpha1_UpgradeStatus(in *node.UpgradeSt
 // Convert_node_UpgradeStatus_To_v1alpha1_UpgradeStatus is an autogenerated conversion function.
 func Convert_node_UpgradeStatus_To_v1alpha1_UpgradeStatus(in *node.UpgradeStatus, out *UpgradeStatus, s conversion.Scope) error {
 	return autoConvert_node_UpgradeStatus_To_v1alpha1_UpgradeStatus(in, out, s)
+}
+
+func autoConvert_v1alpha1_Volume_To_node_Volume(in *Volume, out *node.Volume, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
+	if err := Convert_v1alpha1_VolumeSpec_To_node_VolumeSpec(&in.Spec, &out.Spec, s); err != nil {
+		return err
+	}
+	if err := Convert_v1alpha1_VolumeStatus_To_node_VolumeStatus(&in.Status, &out.Status, s); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Convert_v1alpha1_Volume_To_node_Volume is an autogenerated conversion function.
+func Convert_v1alpha1_Volume_To_node_Volume(in *Volume, out *node.Volume, s conversion.Scope) error {
+	return autoConvert_v1alpha1_Volume_To_node_Volume(in, out, s)
+}
+
+func autoConvert_node_Volume_To_v1alpha1_Volume(in *node.Volume, out *Volume, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
+	if err := Convert_node_VolumeSpec_To_v1alpha1_VolumeSpec(&in.Spec, &out.Spec, s); err != nil {
+		return err
+	}
+	if err := Convert_node_VolumeStatus_To_v1alpha1_VolumeStatus(&in.Status, &out.Status, s); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Convert_node_Volume_To_v1alpha1_Volume is an autogenerated conversion function.
+func Convert_node_Volume_To_v1alpha1_Volume(in *node.Volume, out *Volume, s conversion.Scope) error {
+	return autoConvert_node_Volume_To_v1alpha1_Volume(in, out, s)
+}
+
+func autoConvert_v1alpha1_VolumeList_To_node_VolumeList(in *VolumeList, out *node.VolumeList, s conversion.Scope) error {
+	out.ListMeta = in.ListMeta
+	out.Items = *(*[]node.Volume)(unsafe.Pointer(&in.Items))
+	return nil
+}
+
+// Convert_v1alpha1_VolumeList_To_node_VolumeList is an autogenerated conversion function.
+func Convert_v1alpha1_VolumeList_To_node_VolumeList(in *VolumeList, out *node.VolumeList, s conversion.Scope) error {
+	return autoConvert_v1alpha1_VolumeList_To_node_VolumeList(in, out, s)
+}
+
+func autoConvert_node_VolumeList_To_v1alpha1_VolumeList(in *node.VolumeList, out *VolumeList, s conversion.Scope) error {
+	out.ListMeta = in.ListMeta
+	out.Items = *(*[]Volume)(unsafe.Pointer(&in.Items))
+	return nil
+}
+
+// Convert_node_VolumeList_To_v1alpha1_VolumeList is an autogenerated conversion function.
+func Convert_node_VolumeList_To_v1alpha1_VolumeList(in *node.VolumeList, out *VolumeList, s conversion.Scope) error {
+	return autoConvert_node_VolumeList_To_v1alpha1_VolumeList(in, out, s)
+}
+
+func autoConvert_v1alpha1_VolumePeer_To_node_VolumePeer(in *VolumePeer, out *node.VolumePeer, s conversion.Scope) error {
+	*out = *(*node.VolumePeer)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_v1alpha1_VolumePeer_To_node_VolumePeer is an autogenerated conversion function.
+func Convert_v1alpha1_VolumePeer_To_node_VolumePeer(in *VolumePeer, out *node.VolumePeer, s conversion.Scope) error {
+	return autoConvert_v1alpha1_VolumePeer_To_node_VolumePeer(in, out, s)
+}
+
+func autoConvert_node_VolumePeer_To_v1alpha1_VolumePeer(in *node.VolumePeer, out *VolumePeer, s conversion.Scope) error {
+	*out = *(*VolumePeer)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_node_VolumePeer_To_v1alpha1_VolumePeer is an autogenerated conversion function.
+func Convert_node_VolumePeer_To_v1alpha1_VolumePeer(in *node.VolumePeer, out *VolumePeer, s conversion.Scope) error {
+	return autoConvert_node_VolumePeer_To_v1alpha1_VolumePeer(in, out, s)
+}
+
+func autoConvert_v1alpha1_VolumeSpec_To_node_VolumeSpec(in *VolumeSpec, out *node.VolumeSpec, s conversion.Scope) error {
+	*out = *(*node.VolumeSpec)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_v1alpha1_VolumeSpec_To_node_VolumeSpec is an autogenerated conversion function.
+func Convert_v1alpha1_VolumeSpec_To_node_VolumeSpec(in *VolumeSpec, out *node.VolumeSpec, s conversion.Scope) error {
+	return autoConvert_v1alpha1_VolumeSpec_To_node_VolumeSpec(in, out, s)
+}
+
+func autoConvert_node_VolumeSpec_To_v1alpha1_VolumeSpec(in *node.VolumeSpec, out *VolumeSpec, s conversion.Scope) error {
+	*out = *(*VolumeSpec)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_node_VolumeSpec_To_v1alpha1_VolumeSpec is an autogenerated conversion function.
+func Convert_node_VolumeSpec_To_v1alpha1_VolumeSpec(in *node.VolumeSpec, out *VolumeSpec, s conversion.Scope) error {
+	return autoConvert_node_VolumeSpec_To_v1alpha1_VolumeSpec(in, out, s)
+}
+
+func autoConvert_v1alpha1_VolumeStatus_To_node_VolumeStatus(in *VolumeStatus, out *node.VolumeStatus, s conversion.Scope) error {
+	*out = *(*node.VolumeStatus)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_v1alpha1_VolumeStatus_To_node_VolumeStatus is an autogenerated conversion function.
+func Convert_v1alpha1_VolumeStatus_To_node_VolumeStatus(in *VolumeStatus, out *node.VolumeStatus, s conversion.Scope) error {
+	return autoConvert_v1alpha1_VolumeStatus_To_node_VolumeStatus(in, out, s)
+}
+
+func autoConvert_node_VolumeStatus_To_v1alpha1_VolumeStatus(in *node.VolumeStatus, out *VolumeStatus, s conversion.Scope) error {
+	*out = *(*VolumeStatus)(unsafe.Pointer(in))
+	return nil
+}
+
+// Convert_node_VolumeStatus_To_v1alpha1_VolumeStatus is an autogenerated conversion function.
+func Convert_node_VolumeStatus_To_v1alpha1_VolumeStatus(in *node.VolumeStatus, out *VolumeStatus, s conversion.Scope) error {
+	return autoConvert_node_VolumeStatus_To_v1alpha1_VolumeStatus(in, out, s)
 }
