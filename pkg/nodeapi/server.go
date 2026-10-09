@@ -80,8 +80,10 @@ type Options struct {
 	Machines            bool
 	VMNetworkKubeconfig string
 
-	// ModelServers: the node serves language models (modelservers resource).
-	ModelServers bool
+	// ModelServers: the node serves language models (modelservers resource),
+	// with all its memory but ModelReserveMiB for them.
+	ModelServers    bool
+	ModelReserveMiB int64
 
 	// RoutesKubeconfig reads the nodes to route pod subnets between them.
 	RoutesKubeconfig string
@@ -141,7 +143,7 @@ func Run(ctx context.Context, o Options) error {
 	}
 	var models *modelHost
 	if o.ModelServers {
-		models = newModelHost()
+		models = newModelHost(o.ModelReserveMiB << 20)
 		storages["modelservers"] = modelServerStorage{models}
 	}
 	logs := &logStorage{kinit: kinit}

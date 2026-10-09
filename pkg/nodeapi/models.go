@@ -23,8 +23,8 @@ type modelHost struct {
 	servers *ai.Servers
 }
 
-func newModelHost() *modelHost {
-	return &modelHost{objects: newObjects(), servers: &ai.Servers{}}
+func newModelHost(reserve int64) *modelHost {
+	return &modelHost{objects: newObjects(), servers: &ai.Servers{Reserve: reserve}}
 }
 
 // run applies every model server, each on its own, until ctx ends.

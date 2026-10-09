@@ -35,10 +35,18 @@ var (
 	RunDir   = "/run/kuberoot/models"
 	LogDir   = "/var/log/kuberoot/models"
 	Binary   = "/usr/bin/llama-server"
+	// CgroupDir holds the servers' memory: all of the node's but Reserve,
+	// so that a server asking for more is stopped, and not the node.
+	CgroupDir = "/sys/fs/cgroup/kuberoot-models"
+	// RestartDelay: a server that exits is started again after this.
+	RestartDelay = 30 * time.Second
 )
 
 // Servers are the model servers of the node.
 type Servers struct {
+	// Reserve is the memory kept from the servers for the node itself.
+	Reserve int64
+
 	mu       sync.Mutex
 	progress map[string]int64 // sha256 -> bytes downloaded so far
 }
@@ -123,8 +131,52 @@ func (s *Servers) Apply(ctx context.Context, name string, spec node.ModelServerS
 		if err := s.stop(name, pid); err != nil {
 			return err
 		}
+	} else if s.startedWith(name) == configKey(spec) {
+		// It ran with these settings and exited: not again at once.
+		if info, err := os.Stat(s.pidFile(name) + ".config"); err == nil && time.Since(info.ModTime()) < RestartDelay {
+			return nil
+		}
 	}
 	return s.start(name, spec)
+}
+
+// cgroup is the server's own group under the servers' limit; the whole
+// server goes when it runs out.
+func (s *Servers) cgroup(name string) (*os.File, error) {
+	if err := os.MkdirAll(CgroupDir, 0o755); err != nil {
+		return nil, err
+	}
+	if total := memTotal(); total > 0 {
+		limit := total - s.Reserve
+		if limit < total/4 {
+			limit = total / 4
+		}
+		if err := os.WriteFile(filepath.Join(CgroupDir, "memory.max"), []byte(strconv.FormatInt(limit, 10)), 0o644); err != nil {
+			return nil, fmt.Errorf("memory limit: %w", err)
+		}
+	}
+	_ = os.WriteFile(filepath.Join(CgroupDir, "memory.swap.max"), []byte("0"), 0o644)
+	_ = os.WriteFile(filepath.Join(CgroupDir, "cgroup.subtree_control"), []byte("+memory +cpu"), 0o644)
+	dir := filepath.Join(CgroupDir, name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+	_ = os.WriteFile(filepath.Join(dir, "memory.oom.group"), []byte("1"), 0o644)
+	return os.Open(dir)
+}
+
+func memTotal() int64 {
+	raw, err := os.ReadFile("/proc/meminfo")
+	if err != nil {
+		return 0
+	}
+	for _, line := range strings.Split(string(raw), "\n") {
+		if f := strings.Fields(line); len(f) >= 2 && f[0] == "MemTotal:" {
+			kb, _ := strconv.ParseInt(f[1], 10, 64)
+			return kb << 10
+		}
+	}
+	return 0
 }
 
 func (s *Servers) start(name string, spec node.ModelServerSpec) error {
@@ -138,10 +190,16 @@ func (s *Servers) start(name string, spec node.ModelServerSpec) error {
 		return err
 	}
 	defer log.Close()
+	cg, err := s.cgroup(name)
+	if err != nil {
+		return err
+	}
+	defer cg.Close()
 	cmd := exec.Command(Binary, Args(spec)...)
 	cmd.Stdout, cmd.Stderr = log, log
-	// A session of its own: the server outlives the node API.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	// A session of its own: the server outlives the node API. It starts in
+	// its cgroup, under the limit from its first instruction.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, UseCgroupFD: true, CgroupFD: int(cg.Fd())}
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start llama-server: %w", err)
 	}
