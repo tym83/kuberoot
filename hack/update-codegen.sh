@@ -15,3 +15,7 @@ go run $OPENAPI --go-header-file $HEADER \
   --output-file zz_generated.openapi.go \
   k8s.io/apimachinery/pkg/apis/meta/v1 k8s.io/apimachinery/pkg/runtime k8s.io/apimachinery/pkg/version \
   ./pkg/apis/node/v1alpha1
+
+# The router API: deepcopy, and its CRDs as the router distribution's add-ons.
+go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.22.0 object:headerFile=$HEADER \
+  paths=./pkg/apis/router/... crd:crdVersions=v1 output:crd:dir=distros/router/addons
