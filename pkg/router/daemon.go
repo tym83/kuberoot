@@ -2,9 +2,12 @@ package router
 
 import (
 	"context"
+	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -20,6 +23,20 @@ type Daemon struct {
 	cancel  context.CancelFunc
 	done    chan struct{}
 	running bool
+	// The last time the program exited on its own, and what it said.
+	exitedAt time.Time
+	exitMsg  string
+}
+
+// Failure says why the program keeps exiting, if it exited on its own in
+// the last minute and a half; empty while it runs.
+func (d *Daemon) Failure() string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.exitMsg == "" || time.Since(d.exitedAt) > 90*time.Second {
+		return ""
+	}
+	return d.Name + " exited: " + d.exitMsg
 }
 
 // Start runs the program unless it already runs.
@@ -67,14 +84,21 @@ func (d *Daemon) loop(ctx context.Context, done chan struct{}) {
 	backoff := time.Second
 	for ctx.Err() == nil {
 		cmd := exec.CommandContext(ctx, d.Args[0], d.Args[1:]...)
-		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+		var tail lastLine
+		cmd.Stdout, cmd.Stderr = os.Stdout, io.MultiWriter(os.Stderr, &tail)
+		cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
 		cmd.WaitDelay = 10 * time.Second
 		start := time.Now()
 		err := cmd.Run()
 		if ctx.Err() != nil {
 			return
 		}
+		d.mu.Lock()
+		d.exitedAt, d.exitMsg = time.Now(), tail.String()
+		if d.exitMsg == "" && err != nil {
+			d.exitMsg = err.Error()
+		}
+		d.mu.Unlock()
 		if time.Since(start) > time.Minute {
 			backoff = time.Second
 		}
@@ -86,4 +110,27 @@ func (d *Daemon) loop(ctx context.Context, done chan struct{}) {
 		}
 		backoff = min(backoff*2, 30*time.Second)
 	}
+}
+
+// lastLine keeps the last non-empty line written to it.
+type lastLine struct {
+	mu   sync.Mutex
+	line string
+}
+
+func (l *lastLine) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, s := range strings.Split(string(p), "\n") {
+		if s = strings.TrimSpace(s); s != "" {
+			l.line = s
+		}
+	}
+	return len(p), nil
+}
+
+func (l *lastLine) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.line
 }

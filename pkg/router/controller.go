@@ -192,14 +192,20 @@ func (c *Controller) reconcile(ctx context.Context) {
 	}
 	if err := c.applyDnsmasq(DnsmasqConfig(ok, c.leaseFile())); err != nil {
 		failed[Ref{"DHCPServer", "*"}] = err
+	} else if f := c.dnsmasq.Failure(); f != "" {
+		failed[Ref{"DHCPServer", "*"}] = fmt.Errorf("%s", f)
 	}
 	routerID := c.RouterID
 	if routerID == "" {
 		routerID = FirstAddress4()
 	}
-	if err := c.applyBird(BirdConfig(ok, routerID)); err != nil {
-		failed[Ref{"BGPRouter", "*"}] = err
-		failed[Ref{"BGPPeer", "*"}] = err
+	birdErr := c.applyBird(BirdConfig(ok, routerID))
+	if birdErr == nil && c.bird.Failure() != "" {
+		birdErr = fmt.Errorf("%s", c.bird.Failure())
+	}
+	if birdErr != nil {
+		failed[Ref{"BGPRouter", "*"}] = birdErr
+		failed[Ref{"BGPPeer", "*"}] = birdErr
 	}
 	sessions := c.sessions(ctx)
 	leases := c.leases()
