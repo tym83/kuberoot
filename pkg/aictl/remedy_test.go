@@ -33,7 +33,7 @@ func TestDecideApproval(t *testing.T) {
 		{remedy(v1.ActionRestartService, true, time.Minute, now), 0, "Running", "person", ""},
 		{remedy(v1.ActionRestartModelServer, false, time.Minute, now), 0, "Running", "policy", ""},
 		{remedy(v1.ActionRestartModelServer, false, time.Minute, now), 2, "Proposed", "policy", "held back"},
-		{remedy(v1.ActionRebootNode, false, 2 * time.Hour, now), 0, "Expired", "", "not approved"},
+		{remedy(v1.ActionRebootNode, false, 2*time.Hour, now), 0, "Expired", "", "not approved"},
 		{remedy(v1.ActionEscalate, false, time.Minute, now), 0, "Escalated", "", "person"},
 	}
 	for i, c := range cases {
