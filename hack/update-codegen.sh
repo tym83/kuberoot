@@ -19,3 +19,7 @@ go run $OPENAPI --go-header-file $HEADER \
 # The router API: deepcopy, and its CRDs as the router distribution's add-ons.
 go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.22.0 object:headerFile=$HEADER \
   paths=./pkg/apis/router/... crd:crdVersions=v1 output:crd:dir=distros/router/addons
+
+# The virtual machines API: deepcopy, and its CRD as the hypervisor distribution's add-on.
+go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.22.0 object:headerFile=$HEADER \
+  paths=./pkg/apis/vm/... crd:crdVersions=v1 output:crd:dir=distros/hypervisor/addons

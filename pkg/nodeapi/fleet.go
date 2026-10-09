@@ -432,9 +432,18 @@ func (s *fleetStorage) ConvertToTable(ctx context.Context, obj runtime.Object, o
 }
 
 // fleetLog streams nodeservices/<node>.<service>/log from whichever node runs the service.
+// fleetLog serves a node's text stream (a service's log, a machine's
+// console) from any node, as <node>.<name>.
 type fleetLog struct {
-	local *logStorage
+	local streamGetter
 	f     *fleet
+	// resource and sub name the stream on a member: <resource>/<name>/<sub>.
+	resource, sub string
+}
+
+type streamGetter interface {
+	New() runtime.Object
+	Get(ctx context.Context, name string, opts *metav1.GetOptions) (runtime.Object, error)
 }
 
 func (l *fleetLog) New() runtime.Object { return l.local.New() }
@@ -450,9 +459,9 @@ func (l *fleetLog) Get(ctx context.Context, name string, opts *metav1.GetOptions
 	}
 	m, ok := l.f.member(ctx, nodeName)
 	if !ok {
-		return nil, apierrors.NewNotFound(node.Resource("nodeservices"), name)
+		return nil, apierrors.NewNotFound(node.Resource(l.resource), name)
 	}
-	return &remoteStream{f: l.f, m: m, path: "nodeservices/" + svc + "/log"}, nil
+	return &remoteStream{f: l.f, m: m, path: l.resource + "/" + svc + "/" + l.sub}, nil
 }
 
 type remoteStream struct {

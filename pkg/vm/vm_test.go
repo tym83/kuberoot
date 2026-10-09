@@ -1,0 +1,60 @@
+package vm
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/tym83/kuberoot/pkg/apis/node"
+)
+
+func TestResConfig(t *testing.T) {
+	v := &Volumes{Node: "node-b", Address: "10.0.0.2"}
+	s := node.VolumeSpec{SizeBytes: 1 << 30, Minor: 100, Port: 7800, NodeID: 1,
+		Peers: []node.VolumePeer{{Node: "node-a", Address: "10.0.0.1", NodeID: 0}, {Node: "node-c", Address: "10.0.0.3", NodeID: 2}}}
+	got := v.ResConfig("web", s, "/dev/loop3")
+	for _, want := range []string{
+		"resource vm-web {",
+		"quorum majority;",
+		"on-no-quorum io-error;",
+		"device minor 100;\n\t\tdisk /dev/loop3;",
+		"on node-a {\n\t\tnode-id 0;\n\t\taddress 10.0.0.1:7800;",
+		"on node-b {\n\t\tnode-id 1;\n\t\taddress 10.0.0.2:7800;",
+		"hosts node-a node-b node-c;",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("resource lacks %q:\n%s", want, got)
+		}
+	}
+	if single := v.ResConfig("solo", node.VolumeSpec{Minor: 101, Port: 7801}, "/dev/loop4"); strings.Contains(single, "connection-mesh") {
+		t.Errorf("a volume without peers has a mesh:\n%s", single)
+	}
+}
+
+func TestParseStatus(t *testing.T) {
+	raw := `[{"name":"vm-web","node-id":1,"role":"Primary","suspended":false,
+		"devices":[{"volume":0,"minor":100,"disk-state":"UpToDate","client":false,"quorum":true}],
+		"connections":[{"peer-node-id":0,"name":"node-a","connection-state":"Connected"},
+		               {"peer-node-id":2,"name":"node-c","connection-state":"Connecting"}]}]`
+	st, err := ParseStatus([]byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Role != "Primary" || st.DiskState != "UpToDate" || !st.Quorum || st.Device != "/dev/drbd100" ||
+		st.PeerStates["node-a"] != "Connected" || st.PeerStates["node-c"] != "Connecting" || st.Phase != "Ready" {
+		t.Errorf("status = %+v", st)
+	}
+}
+
+func TestMachineArgs(t *testing.T) {
+	m := &Machines{}
+	got := strings.Join(m.Args("web", node.MachineSpec{CPUs: 2, MemoryMiB: 1024, MAC: "52:54:00:aa:bb:cc"}, []string{"/dev/drbd100"}), " ")
+	for _, want := range []string{"--cpus boot=2", "--memory size=1024M", "--firmware /usr/share/kuberoot/CLOUDHV.fd",
+		"--disk path=/dev/drbd100", "--net tap=" + TapName("web") + ",mac=52:54:00:aa:bb:cc", "--api-socket path=/run/kuberoot/vm/web.sock"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("args lack %q: %s", want, got)
+		}
+	}
+	if len(TapName("a-very-long-machine-name-indeed")) > 15 {
+		t.Error("tap name longer than a link name may be")
+	}
+}

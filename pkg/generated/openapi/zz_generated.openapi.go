@@ -50,6 +50,10 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.JoinTicketStatus":    schema_pkg_apis_node_v1alpha1_JoinTicketStatus(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Kubeconfig":          schema_pkg_apis_node_v1alpha1_Kubeconfig(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.KubeconfigList":      schema_pkg_apis_node_v1alpha1_KubeconfigList(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Machine":             schema_pkg_apis_node_v1alpha1_Machine(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.MachineList":         schema_pkg_apis_node_v1alpha1_MachineList(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.MachineSpec":         schema_pkg_apis_node_v1alpha1_MachineSpec(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.MachineStatus":       schema_pkg_apis_node_v1alpha1_MachineStatus(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Membership":          schema_pkg_apis_node_v1alpha1_Membership(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.MembershipList":      schema_pkg_apis_node_v1alpha1_MembershipList(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.MembershipSpec":      schema_pkg_apis_node_v1alpha1_MembershipSpec(ref),
@@ -69,6 +73,11 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.UpgradeList":         schema_pkg_apis_node_v1alpha1_UpgradeList(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.UpgradeSpec":         schema_pkg_apis_node_v1alpha1_UpgradeSpec(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.UpgradeStatus":       schema_pkg_apis_node_v1alpha1_UpgradeStatus(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Volume":              schema_pkg_apis_node_v1alpha1_Volume(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.VolumeList":          schema_pkg_apis_node_v1alpha1_VolumeList(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.VolumePeer":          schema_pkg_apis_node_v1alpha1_VolumePeer(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.VolumeSpec":          schema_pkg_apis_node_v1alpha1_VolumeSpec(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.VolumeStatus":        schema_pkg_apis_node_v1alpha1_VolumeStatus(ref),
 		v1.APIGroup{}.OpenAPIModelName():                                       schema_pkg_apis_meta_v1_APIGroup(ref),
 		v1.APIGroupList{}.OpenAPIModelName():                                   schema_pkg_apis_meta_v1_APIGroupList(ref),
 		v1.APIResource{}.OpenAPIModelName():                                    schema_pkg_apis_meta_v1_APIResource(ref),
@@ -916,6 +925,194 @@ func schema_pkg_apis_node_v1alpha1_KubeconfigList(ref common.ReferenceCallback) 
 		},
 		Dependencies: []string{
 			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Kubeconfig", v1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_Machine(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Machine is a virtual machine on this node, run by cloud-hypervisor on KVM with no pod and no libvirt.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.MachineSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.MachineStatus"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.MachineSpec", "github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.MachineStatus", v1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_MachineList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Machine"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Machine", v1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_MachineSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"cpus": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int32",
+						},
+					},
+					"memoryMiB": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int64",
+						},
+					},
+					"volumes": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Volumes on this node, by name, as the machine's disks in order.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"mac": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MAC of the machine's network interface on the machines' network.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"running": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Running: the machine is started when true and shut down when false.",
+							Default:     false,
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"cpus", "memoryMiB", "volumes", "running"},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_MachineStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"phase": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Phase: Running, Stopped or Failed.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"message": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"pid": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int32",
+						},
+					},
+					"startedAt": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref(v1.Time{}.OpenAPIModelName()),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			v1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -1834,6 +2031,294 @@ func schema_pkg_apis_node_v1alpha1_UpgradeStatus(ref common.ReferenceCallback) c
 					},
 				},
 				Required: []string{"progress"},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_Volume(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Volume is a disk for virtual machines on this node: a file, replicated with DRBD to the same volume on other nodes when peers are given. The node it runs on is its primary.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.VolumeSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.VolumeStatus"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.VolumeSpec", "github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.VolumeStatus", v1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_VolumeList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Volume"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.Volume", v1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_VolumePeer(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"node": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"address": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"nodeID": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int32",
+						},
+					},
+				},
+				Required: []string{"node", "address", "nodeID"},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_VolumeSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"sizeBytes": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int64",
+						},
+					},
+					"minor": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Minor of the DRBD device, /dev/drbd<minor>, and its port; the same on every node of the volume.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"port": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int32",
+						},
+					},
+					"nodeID": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NodeID of this node in the volume, unique among its peers.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"peers": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Peers are the volume on the other nodes.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.VolumePeer"),
+									},
+								},
+							},
+						},
+					},
+					"primary": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Primary: this node writes to the volume (runs the machine using it).",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"image": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Image is written onto the volume when it is created, here: a URL of a qcow2 or raw disk image. Only one node of a volume gets an image.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"sizeBytes", "minor", "port", "nodeID"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.VolumePeer"},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_VolumeStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"phase": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Phase: Creating, Ready or Failed.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"message": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"device": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Device to give a machine, such as /dev/drbd100.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"role": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Role (Primary, Secondary) and DiskState (UpToDate, Inconsistent...) as DRBD reports them.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"diskState": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"quorum": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Quorum: this node may write.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"peerStates": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PeerStates: the connection to each peer; PeerDisks: their disks.",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"peerDisks": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"imageWritten": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ImageWritten: the volume's data exists, written here or synced from a peer; an image is never written over it.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+				},
 			},
 		},
 	}
