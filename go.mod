@@ -3,6 +3,7 @@ module github.com/tym83/kuberoot
 go 1.26.5
 
 require (
+	filippo.io/age v1.2.1
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/diskfs/go-diskfs v1.9.4

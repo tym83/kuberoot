@@ -5,12 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	agecrypt "filippo.io/age"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -118,6 +120,11 @@ func (s *installationStorage) Create(_ context.Context, obj runtime.Object, vali
 		if sum, err := hex.DecodeString(r.Sha256); r.URL == "" || err != nil || len(sum) != sha256.Size {
 			return nil, apierrors.NewBadRequest("spec.restore needs url and the archive's sha256")
 		}
+		if r.Identity != "" {
+			if _, err := agecrypt.ParseIdentities(strings.NewReader(r.Identity)); err != nil {
+				return nil, apierrors.NewBadRequest("spec.restore.identity: " + err.Error())
+			}
+		}
 	}
 	artifacts, err := installer.FromMedia()
 	if err != nil {
@@ -140,9 +147,14 @@ func (s *installationStorage) Create(_ context.Context, obj runtime.Object, vali
 	inst.UID = uuid.NewUUID()
 	inst.CreationTimestamp = now
 	inst.Status = node.InstallationStatus{Phase: installer.PhasePending, StartedAt: &now}
+	// The identity opens the archive once; it is kept in no object.
+	spec := *inst.Spec.DeepCopy()
+	if inst.Spec.Restore != nil {
+		inst.Spec.Restore.Identity = ""
+	}
 	inst.ResourceVersion = resourceVersion(inst.Status)
 	s.items[inst.Name] = inst
-	go s.run(inst.Name, inst.Spec, artifacts)
+	go s.run(inst.Name, spec, artifacts)
 	return inst.DeepCopy(), nil
 }
 
@@ -231,19 +243,60 @@ func (s *installationStorage) ConvertToTable(_ context.Context, obj runtime.Obje
 // fetchStateArchive downloads the state archive to restore and checks it is
 // the one asked for: it holds the cluster's certificate authorities.
 func fetchStateArchive(r *node.InstallationRestore, update func(phase, message string, progress int)) (string, error) {
-	path := "/run/kuberoot/restore.tar.gz"
+	const download, path = "/run/kuberoot/restore.download", "/run/kuberoot/restore.tar.gz"
+	defer os.Remove(download)
 	update(installer.PhasePending, "downloading the state archive", 1)
-	if err := upgrade.Download(context.Background(), r.URL, path, func(done, _ int64) {
+	if err := upgrade.Download(context.Background(), r.URL, download, func(done, _ int64) {
 		update(installer.PhasePending, fmt.Sprintf("downloading the state archive: %d MiB", done>>20), 2)
 	}); err != nil {
 		return path, fmt.Errorf("state archive: %w", err)
 	}
-	sum, err := release.FileSum(path)
+	sum, err := release.FileSum(download)
 	if err != nil {
 		return path, err
 	}
 	if !strings.EqualFold(hex.EncodeToString(sum), r.Sha256) {
 		return path, fmt.Errorf("state archive: sha256 %x is not the one given", sum)
 	}
-	return path, nil
+	return path, openStateArchive(download, path, r.Identity)
 }
+
+// openStateArchive writes the archive at src to dst, decrypting it with the
+// age identity when it is encrypted.
+func openStateArchive(src, dst, identity string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	head := make([]byte, len(ageHeader))
+	n, _ := io.ReadFull(in, head)
+	if _, err := in.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	var r io.Reader = in
+	if string(head[:n]) == ageHeader {
+		if identity == "" {
+			return fmt.Errorf("state archive is encrypted: give spec.restore.identity")
+		}
+		ids, err := agecrypt.ParseIdentities(strings.NewReader(identity))
+		if err != nil {
+			return err
+		}
+		if r, err = agecrypt.Decrypt(in, ids...); err != nil {
+			return fmt.Errorf("state archive: %w", err)
+		}
+	}
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, r); err != nil {
+		out.Close()
+		return fmt.Errorf("state archive: %w", err)
+	}
+	return out.Close()
+}
+
+// ageHeader starts every age-encrypted file.
+const ageHeader = "age-encryption.org/v1"

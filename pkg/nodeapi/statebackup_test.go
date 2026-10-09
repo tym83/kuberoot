@@ -5,10 +5,14 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	agecrypt "filippo.io/age"
 )
 
 func TestBackupConfigDefaultsAndChecks(t *testing.T) {
@@ -27,7 +31,7 @@ func TestBackupConfigDefaultsAndChecks(t *testing.T) {
 		}
 	}
 	c, err = parseBackupConfig(map[string][]byte{"s3Endpoint": []byte("https://s3.example.com"), "s3Bucket": []byte("b"),
-		"s3AccessKey": []byte("a"), "s3SecretKey": []byte("s")}, "kr-1")
+		"s3AccessKey": []byte("a"), "s3SecretKey": []byte("s"), "allowUnencrypted": []byte("true")}, "kr-1")
 	if err != nil || c.s3.prefix != "kuberoot/kr-1/" || c.s3.Region != "us-east-1" {
 		t.Errorf("s3 target = %+v, %v", c.s3, err)
 	}
@@ -56,7 +60,7 @@ func TestBackupsAreTakenUploadedAndPruned(t *testing.T) {
 	}))
 	defer store.Close()
 	cfg, err := parseBackupConfig(map[string][]byte{"s3Endpoint": []byte(store.URL), "s3Bucket": []byte("backups"),
-		"s3AccessKey": []byte("a"), "s3SecretKey": []byte("s"), "keep": []byte("2")}, "kr-1")
+		"s3AccessKey": []byte("a"), "s3SecretKey": []byte("s"), "keep": []byte("2"), "allowUnencrypted": []byte("true")}, "kr-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +69,7 @@ func TestBackupsAreTakenUploadedAndPruned(t *testing.T) {
 		t.Error("no backup yet, but none is due")
 	}
 	for _, name := range []string{"state-1", "state-2", "state-3"} {
-		if _, err := s.take(name); err != nil {
+		if _, err := s.take(name, cfg.recipients); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -98,9 +102,9 @@ func TestUploadFailureIsRecordedAndRetried(t *testing.T) {
 	}))
 	defer store.Close()
 	cfg, _ := parseBackupConfig(map[string][]byte{"s3Endpoint": []byte(store.URL), "s3Bucket": []byte("b"),
-		"s3AccessKey": []byte("a"), "s3SecretKey": []byte("s")}, "kr-1")
+		"s3AccessKey": []byte("a"), "s3SecretKey": []byte("s"), "allowUnencrypted": []byte("true")}, "kr-1")
 	s := fakeBackups(t)
-	if _, err := s.take("state-1"); err != nil {
+	if _, err := s.take("state-1", nil); err != nil {
 		t.Fatal(err)
 	}
 	s.upload(context.Background(), cfg)
@@ -117,7 +121,7 @@ func TestUploadFailureIsRecordedAndRetried(t *testing.T) {
 func TestBackupsAreOrderedByWhenTheyWereTaken(t *testing.T) {
 	s := fakeBackups(t)
 	for _, name := range []string{"zz-first", "aa-second"} {
-		if _, err := s.take(name); err != nil {
+		if _, err := s.take(name, nil); err != nil {
 			t.Fatal(err)
 		}
 		time.Sleep(1100 * time.Millisecond) // archives are stamped to the second
@@ -125,5 +129,87 @@ func TestBackupsAreOrderedByWhenTheyWereTaken(t *testing.T) {
 	s.prune(1)
 	if got := strings.Join(s.names(), ","); got != "aa-second" {
 		t.Errorf("kept %s, want the newest", got)
+	}
+}
+
+func TestUploadsNeedEncryption(t *testing.T) {
+	s3 := map[string][]byte{"s3Endpoint": []byte("https://s3.example.com"), "s3Bucket": []byte("b"),
+		"s3AccessKey": []byte("a"), "s3SecretKey": []byte("s")}
+	if _, err := parseBackupConfig(s3, "kr-1"); err == nil || !strings.Contains(err.Error(), "encryptionRecipient") {
+		t.Errorf("an upload without encryption was accepted: %v", err)
+	}
+	s3["encryptionRecipient"] = []byte("age1notakey")
+	if _, err := parseBackupConfig(s3, "kr-1"); err == nil {
+		t.Error("a malformed recipient was accepted")
+	}
+}
+
+func TestEncryptedBackupRoundTrip(t *testing.T) {
+	id, err := agecrypt.GenerateX25519Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	puts := map[string][]byte{}
+	store := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		puts[r.URL.Path] = body
+		mu.Unlock()
+	}))
+	defer store.Close()
+	cfg, err := parseBackupConfig(map[string][]byte{"s3Endpoint": []byte(store.URL), "s3Bucket": []byte("backups"),
+		"s3AccessKey": []byte("a"), "s3SecretKey": []byte("s"), "encryptionRecipient": []byte(id.Recipient().String())}, "kr-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := fakeBackups(t)
+	if _, err := s.take("old", nil); err != nil { // taken before encryption was set up
+		t.Fatal(err)
+	}
+	if _, err := s.take("sealed", cfg.recipients); err != nil {
+		t.Fatal(err)
+	}
+	s.upload(context.Background(), cfg)
+	b, _ := s.load("sealed")
+	if !b.Status.Encrypted || b.Status.Location != "s3://backups/kuberoot/kr-1/sealed.tar.gz.age" {
+		t.Errorf("status = %+v", b.Status)
+	}
+	if old, _ := s.load("old"); old.Status.Location != "" {
+		t.Error("an archive in the clear left the node once encryption was set up")
+	}
+	sealed := puts["/backups/kuberoot/kr-1/sealed.tar.gz.age"]
+	if len(sealed) == 0 || strings.Contains(string(sealed), "archive") {
+		t.Fatalf("uploaded %q, want an encrypted archive", sealed)
+	}
+
+	dir := t.TempDir()
+	src := filepath.Join(dir, "download")
+	if err := os.WriteFile(src, sealed, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dst := filepath.Join(dir, "restore.tar.gz")
+	if err := openStateArchive(src, dst, ""); err == nil || !strings.Contains(err.Error(), "identity") {
+		t.Errorf("opened without an identity: %v", err)
+	}
+	other, _ := agecrypt.GenerateX25519Identity()
+	if err := openStateArchive(src, dst, other.String()); err == nil {
+		t.Error("opened with someone else's identity")
+	}
+	if err := openStateArchive(src, dst, id.String()); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(dst); string(got) != "archive" {
+		t.Errorf("decrypted %q", got)
+	}
+	// An archive in the clear passes through as it is.
+	if err := os.WriteFile(src, []byte("plain"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := openStateArchive(src, dst, ""); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(dst); string(got) != "plain" {
+		t.Errorf("plain archive became %q", got)
 	}
 }

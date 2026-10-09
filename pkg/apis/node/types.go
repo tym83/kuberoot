@@ -163,6 +163,9 @@ type InstallationRestore struct {
 	// SHA256 of the archive, as its StateBackup reports it. Required: the
 	// archive holds the cluster's certificate authorities.
 	Sha256 string `json:"sha256"`
+	// Identity is the age secret key (AGE-SECRET-KEY-1...) an encrypted
+	// archive opens with. It is used once and never shown back.
+	Identity string `json:"identity,omitempty"`
 }
 
 type InstallationStatus struct {
@@ -354,6 +357,9 @@ type StateBackupStatus struct {
 	CreatedAt metav1.Time `json:"createdAt"`
 	SizeBytes int64       `json:"sizeBytes"`
 	Sha256    string      `json:"sha256"`
+	// Encrypted to the age recipients of kube-system/kuberoot-state-backup;
+	// restoring it needs one of their identities.
+	Encrypted bool `json:"encrypted,omitempty"`
 	// Location in object storage once uploaded.
 	Location string `json:"location,omitempty"`
 	// Message says why the last upload failed.

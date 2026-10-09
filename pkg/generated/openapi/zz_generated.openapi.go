@@ -580,6 +580,13 @@ func schema_pkg_apis_node_v1alpha1_InstallationRestore(ref common.ReferenceCallb
 							Format:      "",
 						},
 					},
+					"identity": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Identity is the age secret key (AGE-SECRET-KEY-1...) an encrypted archive opens with. It is used once and never shown back.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"url", "sha256"},
 			},
@@ -1627,6 +1634,13 @@ func schema_pkg_apis_node_v1alpha1_StateBackupStatus(ref common.ReferenceCallbac
 							Default: "",
 							Type:    []string{"string"},
 							Format:  "",
+						},
+					},
+					"encrypted": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Encrypted to the age recipients of kube-system/kuberoot-state-backup; restoring it needs one of their identities.",
+							Type:        []string{"boolean"},
+							Format:      "",
 						},
 					},
 					"location": {

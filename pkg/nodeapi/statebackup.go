@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	agecrypt "filippo.io/age"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,6 +41,8 @@ type backupConfig struct {
 	interval time.Duration
 	keep     int
 	s3       *s3Target
+	// recipients the archives are encrypted to; none: archives in the clear.
+	recipients []agecrypt.Recipient
 }
 
 type s3Target struct {
@@ -50,9 +53,12 @@ type s3Target struct {
 func (t *s3Target) location(key string) string { return "s3://" + t.Bucket + "/" + key }
 
 // parseBackupConfig reads the Secret's keys: interval (a duration, at least
-// five minutes; one hour by default), keep (local archives, 12 by default)
-// and, to upload, s3Endpoint, s3Bucket, s3AccessKey and s3SecretKey, with
-// optional s3Region and s3Prefix.
+// five minutes; one hour by default), keep (local archives, 12 by default),
+// encryptionRecipient (age public keys, one per line, that archives are
+// encrypted to) and, to upload, s3Endpoint, s3Bucket, s3AccessKey and
+// s3SecretKey, with optional s3Region and s3Prefix. Archives hold the
+// cluster's certificate authorities and every Secret, so they leave the
+// node only encrypted unless allowUnencrypted is "true".
 func parseBackupConfig(data map[string][]byte, nodeName string) (backupConfig, error) {
 	c := backupConfig{interval: time.Hour, keep: 12}
 	get := func(k string) string { return strings.TrimSpace(string(data[k])) }
@@ -70,8 +76,18 @@ func parseBackupConfig(data map[string][]byte, nodeName string) (backupConfig, e
 		}
 		c.keep = n
 	}
+	if v := get("encryptionRecipient"); v != "" {
+		r, err := agecrypt.ParseRecipients(strings.NewReader(v))
+		if err != nil {
+			return c, fmt.Errorf("encryptionRecipient: %w", err)
+		}
+		c.recipients = r
+	}
 	if get("s3Endpoint") == "" {
 		return c, nil
+	}
+	if len(c.recipients) == 0 && get("allowUnencrypted") != "true" {
+		return c, fmt.Errorf("uploads need encryptionRecipient: archives hold the cluster's keys (or set allowUnencrypted: \"true\")")
 	}
 	u, err := url.Parse(get("s3Endpoint"))
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
@@ -118,8 +134,18 @@ func (s *stateBackupStorage) Destroy()                {}
 func (s *stateBackupStorage) NamespaceScoped() bool   { return false }
 func (s *stateBackupStorage) GetSingularName() string { return "statebackup" }
 
-func (s *stateBackupStorage) archive(name string) string { return filepath.Join(s.dir, name+".tar.gz") }
-func (s *stateBackupStorage) meta(name string) string    { return filepath.Join(s.dir, name+".json") }
+// archive is where a backup's archive is: name.tar.gz, with .age when encrypted.
+func (s *stateBackupStorage) archive(name string, encrypted bool) string {
+	return filepath.Join(s.dir, archiveFile(name, encrypted))
+}
+
+func archiveFile(name string, encrypted bool) string {
+	if encrypted {
+		return name + ".tar.gz.age"
+	}
+	return name + ".tar.gz"
+}
+func (s *stateBackupStorage) meta(name string) string { return filepath.Join(s.dir, name+".json") }
 
 func (s *stateBackupStorage) load(name string) (*node.StateBackup, error) {
 	raw, err := os.ReadFile(s.meta(name))
@@ -212,7 +238,7 @@ func (s *stateBackupStorage) Create(ctx context.Context, obj runtime.Object, _ r
 	if err != nil {
 		return nil, apierrors.NewBadRequest(err.Error())
 	}
-	name, err = s.take(name)
+	name, err = s.take(name, cfg.recipients)
 	if err != nil {
 		return nil, apierrors.NewInternalError(err)
 	}
@@ -227,15 +253,23 @@ func (s *stateBackupStorage) Delete(ctx context.Context, name string, _ rest.Val
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_ = os.Remove(s.archive(name))
-	if err := os.Remove(s.meta(name)); err != nil {
-		return nil, false, apierrors.NewInternalError(err)
+	s.remove(name)
+	if _, err := os.Stat(s.meta(name)); err == nil {
+		return nil, false, apierrors.NewInternalError(fmt.Errorf("backup %s could not be removed", name))
 	}
 	return b, true, nil
 }
 
-// take writes a new archive and its status.
-func (s *stateBackupStorage) take(name string) (string, error) {
+// remove deletes a backup's archive and status.
+func (s *stateBackupStorage) remove(name string) {
+	_ = os.Remove(s.archive(name, false))
+	_ = os.Remove(s.archive(name, true))
+	_ = os.Remove(s.meta(name))
+}
+
+// take writes a new archive, encrypted to recipients when there are any, and
+// its status.
+func (s *stateBackupStorage) take(name string, recipients []agecrypt.Recipient) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now().UTC()
@@ -246,13 +280,27 @@ func (s *stateBackupStorage) take(name string) (string, error) {
 	if err := os.MkdirAll(tmpDir, 0o700); err != nil {
 		return "", err
 	}
-	part := filepath.Join(tmpDir, name+".tar.gz")
+	encrypted := len(recipients) > 0
+	part := filepath.Join(tmpDir, archiveFile(name, encrypted))
 	f, err := os.OpenFile(part, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	if err != nil {
 		return "", err
 	}
 	h := sha256.New()
-	err = s.write(io.MultiWriter(f, h), tmpDir)
+	var out io.Writer = io.MultiWriter(f, h)
+	var sealed io.WriteCloser
+	if encrypted {
+		if sealed, err = agecrypt.Encrypt(out, recipients...); err != nil {
+			f.Close()
+			_ = os.Remove(part)
+			return "", err
+		}
+		out = sealed
+	}
+	err = s.write(out, tmpDir)
+	if err == nil && sealed != nil {
+		err = sealed.Close()
+	}
 	if err == nil {
 		err = f.Sync()
 	}
@@ -265,10 +313,10 @@ func (s *stateBackupStorage) take(name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := os.Rename(part, s.archive(name)); err != nil {
+	if err := os.Rename(part, s.archive(name, encrypted)); err != nil {
 		return "", err
 	}
-	st := node.StateBackupStatus{CreatedAt: metav1.NewTime(now), SizeBytes: info.Size(), Sha256: hex.EncodeToString(h.Sum(nil))}
+	st := node.StateBackupStatus{CreatedAt: metav1.NewTime(now), SizeBytes: info.Size(), Sha256: hex.EncodeToString(h.Sum(nil)), Encrypted: encrypted}
 	return name, s.save(name, st)
 }
 
@@ -286,8 +334,11 @@ func (s *stateBackupStorage) upload(ctx context.Context, cfg backupConfig) {
 		if err != nil || b.Status.Location != "" {
 			continue
 		}
-		key := t.prefix + name + ".tar.gz"
-		err = t.Put(ctx, uploadClient, key, s.archive(name), b.Status.Sha256)
+		if !b.Status.Encrypted && len(cfg.recipients) > 0 {
+			continue // taken before encryption was set up: it stays on the node
+		}
+		key := t.prefix + archiveFile(name, b.Status.Encrypted)
+		err = t.Put(ctx, uploadClient, key, s.archive(name, b.Status.Encrypted), b.Status.Sha256)
 		st := b.Status
 		if err != nil {
 			st.Message = "upload: " + err.Error()
@@ -308,8 +359,7 @@ func (s *stateBackupStorage) prune(keep int) {
 	defer s.mu.Unlock()
 	names := s.names()
 	for len(names) > keep {
-		_ = os.Remove(s.archive(names[0]))
-		_ = os.Remove(s.meta(names[0]))
+		s.remove(names[0])
 		names = names[1:]
 	}
 }
@@ -344,7 +394,7 @@ func (s *stateBackupStorage) run(ctx context.Context) {
 			continue
 		}
 		if s.due(cfg.interval) {
-			if name, err := s.take(""); err != nil {
+			if name, err := s.take("", cfg.recipients); err != nil {
 				klog.Errorf("state backup: %v", err)
 			} else {
 				klog.Infof("state backup %s taken", name)
