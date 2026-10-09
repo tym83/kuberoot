@@ -1,5 +1,7 @@
 # kuberoot
 
+[Русская версия](README.ru.md)
+
 kuberoot builds Kubernetes distributions that boot straight on hardware. Each one is a single image with its own Linux kernel, a small init that brings up Kubernetes, and a node that is managed through the Kubernetes API itself: there is no SSH, no shell and no separate node tool, `kubectl` reaches the node. Everything above the base is a [kubepkg](https://github.com/tym83/kubepkg) package, so a distribution is a base plus a meta package, the way a Linux distribution is a kernel plus packages.
 
 The repository builds one distribution so far, `edge`: a general-purpose cluster for one to a few nodes.
