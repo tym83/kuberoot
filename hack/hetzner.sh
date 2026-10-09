@@ -53,9 +53,10 @@ case "${1:-}" in
     flavour=base; [ -f "$ROOT/distros/$distro/kernel.config" ] && flavour=$distro
     tools sh -c "[ -f /work/out/$arch/vmlinuz.efi ] && [ \"\$(cat /work/out/$arch/kernel.flavour 2>/dev/null || echo base)\" = $flavour ] || { $ENV KUBEROOT_DISTRO=$distro $SRC/scripts/build-kernel.sh $arch && $ENV KUBEROOT_DISTRO=$distro $SRC/scripts/build-drbd.sh $arch; }"
     tools sh -c "cd $SRC && $ENV scripts/build-binaries.sh $arch"
-    if [ "${KUBEROOT_DISTRO:-edge}" = ai ]; then
-      tools sh -c "$ENV $SRC/scripts/build-llama.sh $arch"
-    fi
+    case "$distro" in
+      ai) tools sh -c "$ENV $SRC/scripts/build-llama.sh $arch" ;;
+      rt) tools sh -c "$ENV $SRC/scripts/build-rt-tests.sh $arch" ;;
+    esac
     alpine sh -c "$ENV KUBEROOT_VERSION=${KUBEROOT_VERSION:-} KUBEROOT_DISTRO=${KUBEROOT_DISTRO:-edge} sh $SRC/scripts/build-rootfs.sh $arch"
     tools sh -c "$ENV $SRC/scripts/build-initramfs.sh $arch" ;;
   bundle)
