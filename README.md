@@ -4,7 +4,7 @@
 
 kuberoot builds Kubernetes distributions that boot straight on hardware. Each one is a single image with its own Linux kernel, a small init that brings up Kubernetes, and a node that is managed through the Kubernetes API itself: there is no SSH, no shell and no separate node tool, `kubectl` reaches the node. Everything above the base is a [kubepkg](https://github.com/tym83/kubepkg) package, so a distribution is a base plus a meta package, the way a Linux distribution is a kernel plus packages.
 
-The repository builds four distributions: `edge`, a general-purpose cluster for one to a few nodes; `router`, Kubernetes without containers that runs a network router; `hypervisor`, virtual machines on KVM with their disks replicated between nodes, moved off a node that fails; and `ai`, language models served as processes of the nodes behind one OpenAI-compatible endpoint, with new versions rolled out and back by the cluster.
+The repository builds five distributions: `edge`, a general-purpose cluster for one to a few nodes; `router`, Kubernetes without containers that runs a network router; `hypervisor`, virtual machines on KVM with their disks replicated between nodes, moved off a node that fails; `ai`, language models served as processes of the nodes behind one OpenAI-compatible endpoint, with new versions rolled out and back by the cluster; and `rt`, a real-time controller whose pods get whole CPUs with no timer tick on a fully preemptible kernel.
 
 > Status: experimental. The `edge` distribution passes the Kubernetes conformance suite (462 of 462 on a three-node cluster, Kubernetes 1.37.1), but the API of the node and the layout of the state may still change.
 
@@ -105,6 +105,39 @@ A new `spec.source` is a new version. It goes to one node first; once it is read
 
 Each node serves its part through the node API: `modelservers` (the models it serves, their phase and the weights they run) and `modelservers/log` (the server's output).
 
+## The rt distribution
+
+`rt` is a real-time controller: a control loop runs in a pod and wakes on time. The kernel is fully preemptible (PREEMPT_RT). CPUs 0 and 1 keep the node's own work, its interrupts and RCU callbacks; from CPU 2 on, CPUs run with no timer tick while one task runs on them. The kubelet hands whole CPUs out of those to Guaranteed pods that ask for whole CPUs, with their memory from the NUMA node of their CPUs, so the loop has its CPUs to itself:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata: {name: loop}
+spec:
+  containers:
+  - name: loop
+    image: registry.example.org/plant/loop:1.4
+    command: [chrt, --fifo, "80", /loop]
+    securityContext:
+      capabilities: {add: [SYS_NICE]}
+    resources:
+      requests: {cpu: "1", memory: 256Mi}
+      limits: {cpu: "1", memory: 256Mi}
+```
+
+A task with CAP_SYS_NICE runs at a real-time priority (SCHED_FIFO); real-time tasks may take a CPU whole, and the kernel's fair server keeps the node's own work running beside them. SCHED_DEADLINE is not offered to pods: the kernel admits it only for tasks free to run on all the CPUs of their scheduling domain, and a pod's are pinned.
+
+How late the node wakes a real-time task is a resource of the node API, `latencytests`: cyclictest runs a SCHED_FIFO thread on each CPU asked for, the CPUs without a timer tick by default, and the test reports per CPU and overall the least, mean and most latency and the 99th and 99.99th percentiles.
+
+```yaml
+apiVersion: node.kuberoot.dev/v1alpha1
+kind: LatencyTest
+metadata: {name: baseline}
+spec: {durationSeconds: 300}
+```
+
+The distribution needs four CPUs or more. The kernel is built for it apart from the other distributions' (`distros/rt/kernel.config`); on amd64 its CPU layout is part of the kernel's own command line.
+
 ## Node API
 
 | Resource | What it does |
@@ -119,6 +152,7 @@ Each node serves its part through the node API: `modelservers` (the models it se
 | `statebackups` | the control plane's state archives |
 | `volumes`, `machines` | virtual machines' disks and machines (hypervisor) |
 | `modelservers` | the language models the node serves (ai) |
+| `latencytests` | the real-time latency the node delivers (rt) |
 
 ## Installing and upgrading
 
