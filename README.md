@@ -78,6 +78,8 @@ spec:
 
 `kuberoot-vmctl`, on the control plane, places the machine's disk on as many nodes as it has replicas and the machine on one of them. The disk is a DRBD volume: every write reaches the other nodes before it is done, and a node cut off from the majority stops writing. When the machine's node has been down for half a minute, the machine starts on another node holding its disk, with the same disk and address; the node that comes back catches up and drops its copy of the machine. Machines share one network across the nodes (a bridge on each, joined by VXLAN), with a gateway on the control plane for DHCP and the way out.
 
+A running machine moves to another node alive when its `spec.node` changes to another of its replica nodes: the disk is writable on both for the moment of the move, the machine's memory is copied over while it runs, and it goes on there with the same disk and address, without a reboot. A move that does not finish in ten minutes, or loses a node on the way, is called off and the machine stays where it was; `status.failedMigration` names the node until `spec.node` changes again.
+
 Each node serves its part through the node API: `volumes` (the disks on it, with their DRBD role and state), `machines` (the machines it runs) and `machines/console` (a machine's serial console). The kubelet stays for what the cluster knows of its nodes, their registration and heartbeat; no pods run.
 
 ## Node API
