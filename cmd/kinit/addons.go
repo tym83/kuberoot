@@ -55,6 +55,9 @@ func writeAggregation(node nodeInfo) error {
 	if err := os.WriteFile(generatedAddonsDir+"/node-api.yaml", []byte(manifest), 0o644); err != nil {
 		return err
 	}
+	if !activeRole.Packages {
+		return nil
+	}
 	// The package manager's image policy webhook runs in the same way, in the
 	// operator on this node.
 	webhook := fmt.Sprintf(imagePolicyEndpointTemplate, node.name, node.ip, node.name)
@@ -151,8 +154,10 @@ func applyAddons(ctx context.Context, cfg bootConfig, node nodeInfo) {
 	if err := renderAddons(); err != nil {
 		log.Printf("add-ons: %v", err)
 	}
-	if err := renderPackages(cfg); err != nil {
-		log.Printf("packages: %v", err)
+	if activeRole.Packages {
+		if err := renderPackages(cfg); err != nil {
+			log.Printf("packages: %v", err)
+		}
 	}
 	apply := []string{"/usr/bin/kubectl", "--kubeconfig", kubeDir + "/admin.kubeconfig", "apply", "--server-side",
 		"--force-conflicts", "-f", generatedAddonsDir}
@@ -160,7 +165,9 @@ func applyAddons(ctx context.Context, cfg bootConfig, node nodeInfo) {
 		return
 	}
 	log.Printf("add-ons applied")
-	installDistro(ctx, cfg)
+	if activeRole.Packages {
+		installDistro(ctx, cfg)
+	}
 }
 
 // runUntilSuccess runs a tool until it exits 0, each run capped at two minutes,
