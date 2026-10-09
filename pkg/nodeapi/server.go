@@ -143,6 +143,9 @@ func Run(ctx context.Context, o Options) error {
 	if storages["nodeservices"] != nil {
 		resources["nodeservices/log"] = logs
 	}
+	if vms != nil {
+		resources["machines/console"] = consoleStorage{vms}
+	}
 	if o.AdminKubeconfig != "" {
 		admin := clientFrom(o.AdminKubeconfig)
 		if admin == nil {
@@ -156,7 +159,10 @@ func Run(ctx context.Context, o Options) error {
 			storages[name] = &fleetStorage{resource: name, local: st, f: f, singleton: name == "osconfigs"}
 		}
 		if storages["nodeservices"] != nil {
-			resources["nodeservices/log"] = &fleetLog{local: logs, f: f}
+			resources["nodeservices/log"] = &fleetLog{local: logs, f: f, resource: "nodeservices", sub: "log"}
+		}
+		if vms != nil {
+			resources["machines/console"] = &fleetLog{local: consoleStorage{vms}, f: f, resource: "machines", sub: "console"}
 		}
 		tickets, err := newJoinTickets(admin, o)
 		if err != nil {

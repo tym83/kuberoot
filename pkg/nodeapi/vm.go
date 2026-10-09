@@ -360,3 +360,16 @@ func (machineStorage) ConvertToTable(_ context.Context, obj runtime.Object, _ ru
 			return []any{m.Name, m.Spec.CPUs, fmt.Sprintf("%dMi", m.Spec.MemoryMiB), m.Spec.Running, m.Status.Phase, m.Status.PID, m.Status.Message}
 		}), nil
 }
+
+// consoleStorage serves a machine's serial console, as text.
+type consoleStorage struct{ h *vmHost }
+
+func (consoleStorage) New() runtime.Object { return &node.Machine{} }
+func (consoleStorage) Destroy()            {}
+
+func (c consoleStorage) Get(_ context.Context, name string, _ *metav1.GetOptions) (runtime.Object, error) {
+	if _, err := c.h.machines.Load(name); err != nil {
+		return nil, apierrors.NewNotFound(node.Resource("machines"), name)
+	}
+	return &logStream{path: c.h.machines.ConsoleFile(name)}, nil
+}

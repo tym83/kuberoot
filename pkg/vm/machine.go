@@ -217,6 +217,9 @@ func (m *Machines) Delete(ctx context.Context, name string) error {
 	return nil
 }
 
+// ConsoleFile is where a machine's serial console is written.
+func (m *Machines) ConsoleFile(name string) string { return m.consoleLog(name) }
+
 // Console is the end of a machine's serial console.
 func (m *Machines) Console(name string, max int64) ([]byte, error) {
 	f, err := os.Open(m.consoleLog(name))
