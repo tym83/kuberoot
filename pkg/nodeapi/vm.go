@@ -28,6 +28,15 @@ type vmHost struct {
 	mu       sync.Mutex // one change at a time
 	errsMu   sync.Mutex
 	errs     map[string]string
+	// poke asks for a pass right away, after a change.
+	poke chan struct{}
+}
+
+func (h *vmHost) changed() {
+	select {
+	case h.poke <- struct{}{}:
+	default:
+	}
 }
 
 func (h *vmHost) errOf(key string) string {
@@ -38,7 +47,7 @@ func (h *vmHost) errOf(key string) string {
 
 func newVMHost(nodeName, address string) *vmHost {
 	v := &vm.Volumes{Node: nodeName, Address: address}
-	return &vmHost{volumes: v, machines: &vm.Machines{Volumes: v}, errs: map[string]string{}}
+	return &vmHost{volumes: v, machines: &vm.Machines{Volumes: v}, errs: map[string]string{}, poke: make(chan struct{}, 1)}
 }
 
 // run applies every volume, then every machine, until ctx ends.
@@ -63,6 +72,7 @@ func (h *vmHost) run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
+		case <-h.poke:
 		case <-time.After(10 * time.Second):
 		}
 	}
@@ -174,6 +184,7 @@ func (s volumeStorage) Create(ctx context.Context, obj runtime.Object, _ rest.Va
 	if err := s.h.volumes.Save(v.Name, v.Spec); err != nil {
 		return nil, apierrors.NewInternalError(err)
 	}
+	s.h.changed()
 	return s.object(ctx, v.Name)
 }
 
@@ -194,6 +205,7 @@ func (s volumeStorage) Update(ctx context.Context, name string, objInfo rest.Upd
 	if err := s.h.volumes.Save(name, spec); err != nil {
 		return nil, false, apierrors.NewInternalError(err)
 	}
+	s.h.changed()
 	obj, err := s.object(ctx, name)
 	return obj, false, err
 }
@@ -310,6 +322,7 @@ func (s machineStorage) Create(_ context.Context, obj runtime.Object, _ rest.Val
 	if err := s.h.machines.Save(m.Name, m.Spec); err != nil {
 		return nil, apierrors.NewInternalError(err)
 	}
+	s.h.changed()
 	return s.object(m.Name)
 }
 
@@ -326,6 +339,7 @@ func (s machineStorage) Update(ctx context.Context, name string, objInfo rest.Up
 	if err := s.h.machines.Save(name, updated.(*node.Machine).Spec); err != nil {
 		return nil, false, apierrors.NewInternalError(err)
 	}
+	s.h.changed()
 	obj, err := s.object(name)
 	return obj, false, err
 }

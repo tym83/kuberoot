@@ -213,7 +213,9 @@ func (m *Machines) Status(name string, s node.MachineSpec) node.MachineStatus {
 	if pid == 0 {
 		st := node.MachineStatus{Phase: "Stopped"}
 		if s.Running {
-			st.Phase, st.Message = "Failed", lastLine(m.consoleLog(name)+".vmm")
+			// Not started yet, or exited and about to be started again;
+			// what the monitor last said tells which.
+			st.Phase, st.Message = "Starting", lastLine(m.consoleLog(name)+".vmm")
 		}
 		return st
 	}
