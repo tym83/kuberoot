@@ -83,7 +83,7 @@ spec:
         - --root-ca-file={{pki "ca.crt"}}
         - --service-account-private-key-file={{pki "sa.key"}}
         - --use-service-account-credentials=true
-        - --controllers=garbagecollector,namespace,serviceaccount,serviceaccount-token,root-ca-certificate-publisher,clusterrole-aggregation
+        - --controllers=garbagecollector,namespace,serviceaccount,serviceaccount-token,root-ca-cert-publisher,clusterrole-aggregation
         - --leader-elect=false
       - name: kuberoot-router
         after: apiserver
