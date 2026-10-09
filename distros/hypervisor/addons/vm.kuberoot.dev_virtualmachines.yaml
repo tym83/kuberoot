@@ -1,0 +1,147 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: virtualmachines.vm.kuberoot.dev
+spec:
+  group: vm.kuberoot.dev
+  names:
+    kind: VirtualMachine
+    listKind: VirtualMachineList
+    plural: virtualmachines
+    shortNames:
+    - vm
+    singular: virtualmachine
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.running
+      name: Running
+      type: boolean
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.node
+      name: Node
+      type: string
+    - jsonPath: .status.address
+      name: Address
+      type: string
+    - jsonPath: .status.replicaNodes
+      name: Replicas
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: VirtualMachine is a machine of the cluster, wherever it runs.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              cpus:
+                default: 1
+                format: int32
+                minimum: 1
+                type: integer
+              disk:
+                properties:
+                  image:
+                    description: |-
+                      Image written onto the disk when it is created: a URL of a qcow2 or
+                      raw disk image that boots with UEFI.
+                    type: string
+                  size:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    default: 4Gi
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                required:
+                - image
+                type: object
+              memory:
+                anyOf:
+                - type: integer
+                - type: string
+                default: 512Mi
+                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                x-kubernetes-int-or-string: true
+              node:
+                description: Node to run on, among the replicas; any when unset.
+                type: string
+              replicas:
+                default: 3
+                description: |-
+                  Replicas of the disk, on as many nodes; the machine can run on any
+                  of them, and moves to another when its node fails.
+                format: int32
+                maximum: 3
+                minimum: 1
+                type: integer
+              running:
+                default: true
+                description: 'Running: the machine runs; false shuts it down and keeps
+                  its disk.'
+                type: boolean
+            required:
+            - disk
+            type: object
+          status:
+            properties:
+              address:
+                type: string
+              mac:
+                description: MAC of its network interface, and the address it took.
+                type: string
+              message:
+                type: string
+              minor:
+                description: Minor and Port of its replicated disk.
+                format: int32
+                type: integer
+              moves:
+                description: Moves counts the times the machine was started on another
+                  node.
+                format: int32
+                type: integer
+              node:
+                description: Node the machine runs on, and the nodes holding its disk.
+                type: string
+              phase:
+                description: 'Phase: Pending, Starting, Running, Stopped, Moving or
+                  Failed.'
+                type: string
+              port:
+                format: int32
+                type: integer
+              replicaNodes:
+                items:
+                  type: string
+                type: array
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
