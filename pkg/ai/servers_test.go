@@ -1,0 +1,112 @@
+package ai
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/tym83/kuberoot/pkg/apis/node"
+)
+
+func dirs(t *testing.T) {
+	d := t.TempDir()
+	StateDir, BlobDir, RunDir, LogDir = d+"/state", d+"/blobs", d+"/run", d+"/log"
+}
+
+func sum(b string) string {
+	h := sha256.Sum256([]byte(b))
+	return hex.EncodeToString(h[:])
+}
+
+func TestArgs(t *testing.T) {
+	got := strings.Join(Args(node.ModelServerSpec{SHA256: "abc", Model: "qwen", Port: 8100, ContextSize: 4096, Parallel: 2}), " ")
+	for _, want := range []string{"--model " + BlobDir + "/abc.gguf", "--alias qwen", "--port 8100", "--ctx-size 4096", "--parallel 2"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("args lack %q: %s", want, got)
+		}
+	}
+	if strings.Contains(got, "--threads") {
+		t.Errorf("threads passed when unset: %s", got)
+	}
+}
+
+func TestFetchChecksTheHash(t *testing.T) {
+	dirs(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("weights")) }))
+	defer srv.Close()
+	s := &Servers{}
+	if err := s.fetch(context.Background(), srv.URL, sum("other")); err == nil || !strings.Contains(err.Error(), "not the") {
+		t.Fatalf("a mismatching download was kept: %v", err)
+	}
+	if _, err := os.Stat(Blob(sum("other"))); err == nil {
+		t.Fatal("the mismatching weights are on disk")
+	}
+	if err := s.fetch(context.Background(), srv.URL, sum("weights")); err != nil {
+		t.Fatal(err)
+	}
+	if raw, _ := os.ReadFile(Blob(sum("weights"))); string(raw) != "weights" {
+		t.Fatalf("blob holds %q", raw)
+	}
+}
+
+func TestPruneKeepsCurrentAndPrevious(t *testing.T) {
+	dirs(t)
+	s := &Servers{}
+	if err := os.MkdirAll(BlobDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, b := range []string{"v1", "v2", "v3"} {
+		if err := os.WriteFile(Blob(sum(b)), []byte(b), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	spec := node.ModelServerSpec{URL: "u", SHA256: sum("v1"), Model: "m", Port: 8100}
+	if err := s.Save("m", spec); err != nil {
+		t.Fatal(err)
+	}
+	spec.SHA256 = sum("v2")
+	if err := s.Save("m", spec); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Prune(); err != nil {
+		t.Fatal(err)
+	}
+	for b, keep := range map[string]bool{"v1": true, "v2": true, "v3": false} {
+		if _, err := os.Stat(Blob(sum(b))); (err == nil) != keep {
+			t.Errorf("%s kept=%v, want %v", b, err == nil, keep)
+		}
+	}
+	if err := s.Delete("m"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(Blob(sum("v2"))); err == nil {
+		t.Error("weights stayed after their server went")
+	}
+}
+
+func TestStatusTellsAServerThatDied(t *testing.T) {
+	dirs(t)
+	s := &Servers{}
+	spec := node.ModelServerSpec{URL: "u", SHA256: sum("v1"), Model: "m", Port: 8100}
+	if st := s.Status("m", spec); st.Phase != "Starting" {
+		t.Fatalf("never started: %+v", st)
+	}
+	if err := os.MkdirAll(RunDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(s.pidFile("m")+".config", []byte(configKey(spec)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if st := s.Status("m", spec); st.Phase != "Failed" {
+		t.Fatalf("started and gone: %+v", st)
+	}
+	spec.SHA256 = sum("v2")
+	if st := s.Status("m", spec); st.Phase != "Starting" {
+		t.Fatalf("other weights asked for: %+v", st)
+	}
+}

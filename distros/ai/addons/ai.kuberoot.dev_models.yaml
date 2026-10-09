@@ -1,0 +1,174 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: models.ai.kuberoot.dev
+spec:
+  group: ai.kuberoot.dev
+  names:
+    kind: Model
+    listKind: ModelList
+    plural: models
+    singular: model
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.ready
+      name: Ready
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.current.sha256
+      name: Serving
+      type: string
+    - jsonPath: .status.message
+      name: Message
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          Model is a language model the cluster serves, under its name, at the
+          cluster's OpenAI-compatible endpoint.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              contextSize:
+                default: 4096
+                description: |-
+                  ContextSize in tokens, shared by the Parallel requests a replica
+                  serves at once.
+                format: int32
+                type: integer
+              parallel:
+                default: 1
+                format: int32
+                minimum: 1
+                type: integer
+              replicas:
+                default: 1
+                description: 'Replicas: the nodes serving the model.'
+                format: int32
+                minimum: 1
+                type: integer
+              source:
+                description: 'Source is the version to serve: its weights.'
+                properties:
+                  sha256:
+                    pattern: ^[0-9a-f]{64}$
+                    type: string
+                  url:
+                    type: string
+                required:
+                - sha256
+                - url
+                type: object
+              threads:
+                description: Threads for generation on each replica; all the node's
+                  CPUs when 0.
+                format: int32
+                type: integer
+            required:
+            - source
+            type: object
+          status:
+            properties:
+              canary:
+                description: Canary is the node a new version is tried on first.
+                type: string
+              current:
+                description: |-
+                  Current is the version every replica serves; Previous the one before
+                  it, which spec.source set back to rolls the model back.
+                properties:
+                  sha256:
+                    pattern: ^[0-9a-f]{64}$
+                    type: string
+                  url:
+                    type: string
+                required:
+                - sha256
+                - url
+                type: object
+              failedSHA256:
+                description: |-
+                  FailedSHA256 is a version that did not answer on its first node; it is
+                  not tried again until spec.source changes.
+                type: string
+              message:
+                type: string
+              phase:
+                description: 'Phase: Pending, Deploying, Ready, RollingOut, RolledBack
+                  or Degraded.'
+                type: string
+              port:
+                description: Port the replicas listen on, on their nodes.
+                format: int32
+                type: integer
+              previous:
+                description: 'Source is a version of a model: a GGUF file and its
+                  SHA-256.'
+                properties:
+                  sha256:
+                    pattern: ^[0-9a-f]{64}$
+                    type: string
+                  url:
+                    type: string
+                required:
+                - sha256
+                - url
+                type: object
+              ready:
+                description: 'Ready replicas, out of the replicas asked for: "2/3".'
+                type: string
+              replicas:
+                items:
+                  description: Replica is the model on one node.
+                  properties:
+                    address:
+                      type: string
+                    node:
+                      type: string
+                    phase:
+                      description: 'Phase: Downloading, Loading, Ready, Failed or
+                        Starting.'
+                      type: string
+                    sha256:
+                      type: string
+                  required:
+                  - node
+                  type: object
+                type: array
+              rolloutStartedAt:
+                description: 'RolloutStartedAt: when the new version went to its first
+                  node.'
+                format: date-time
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

@@ -23,3 +23,7 @@ go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.22.0 object:headerFile
 # The virtual machines API: deepcopy, and its CRD as the hypervisor distribution's add-on.
 go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.22.0 object:headerFile=$HEADER \
   paths=./pkg/apis/vm/... crd:crdVersions=v1 output:crd:dir=distros/hypervisor/addons
+
+# The models API: deepcopy, and its CRD as the ai distribution's add-on.
+go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.22.0 object:headerFile=$HEADER \
+  paths=./pkg/apis/ai/... crd:crdVersions=v1 output:crd:dir=distros/ai/addons

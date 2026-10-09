@@ -80,6 +80,9 @@ type Options struct {
 	Machines            bool
 	VMNetworkKubeconfig string
 
+	// ModelServers: the node serves language models (modelservers resource).
+	ModelServers bool
+
 	// RoutesKubeconfig reads the nodes to route pod subnets between them.
 	RoutesKubeconfig string
 }
@@ -136,6 +139,11 @@ func Run(ctx context.Context, o Options) error {
 		vms = newVMHost(o.NodeName, o.Advertise)
 		storages["volumes"], storages["machines"] = volumeStorage{vms}, machineStorage{vms}
 	}
+	var models *modelHost
+	if o.ModelServers {
+		models = newModelHost()
+		storages["modelservers"] = modelServerStorage{models}
+	}
 	logs := &logStorage{kinit: kinit}
 	resources := map[string]rest.Storage{
 		"kubeconfigs": &kubeconfigStorage{files: o.Kubeconfig},
@@ -145,6 +153,9 @@ func Run(ctx context.Context, o Options) error {
 	}
 	if vms != nil {
 		resources["machines/console"] = consoleStorage{vms}
+	}
+	if models != nil {
+		resources["modelservers/log"] = modelServerLog{models}
 	}
 	if o.AdminKubeconfig != "" {
 		admin := clientFrom(o.AdminKubeconfig)
@@ -163,6 +174,9 @@ func Run(ctx context.Context, o Options) error {
 		}
 		if vms != nil {
 			resources["machines/console"] = &fleetLog{local: consoleStorage{vms}, f: f, resource: "machines", sub: "console"}
+		}
+		if models != nil {
+			resources["modelservers/log"] = &fleetLog{local: modelServerLog{models}, f: f, resource: "modelservers", sub: "log"}
 		}
 		tickets, err := newJoinTickets(admin, o)
 		if err != nil {
@@ -190,6 +204,9 @@ func Run(ctx context.Context, o Options) error {
 		return err
 	}
 	go assessBoot(ctx, kinit, o.NodeName)
+	if models != nil {
+		go models.run(ctx)
+	}
 	if vms != nil {
 		go vms.run(ctx)
 		if o.VMNetworkKubeconfig != "" {
