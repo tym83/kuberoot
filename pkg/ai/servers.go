@@ -126,6 +126,10 @@ func (s *Servers) Apply(ctx context.Context, name string, spec node.ModelServerS
 	pid := s.pid(name)
 	if pid != 0 {
 		if s.startedWith(name) == configKey(spec) {
+			if ok, _ := healthy(spec.Port); ok {
+				// Proven: no longer the first one the kernel stops.
+				_ = os.WriteFile(fmt.Sprintf("/proc/%d/oom_score_adj", pid), []byte("0"), 0o644)
+			}
 			return nil
 		}
 		if err := s.stop(name, pid); err != nil {
@@ -199,11 +203,14 @@ func (s *Servers) start(name string, spec node.ModelServerSpec) error {
 	cmd.Stdout, cmd.Stderr = log, log
 	// A session of its own: the server outlives the node API. It starts in
 	// its cgroup, under the limit from its first instruction.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, UseCgroupFD: true, CgroupFD: int(cg.Fd())}
+	cmd.SysProcAttr = procAttr(cg)
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start llama-server: %w", err)
 	}
 	go func() { _ = cmd.Wait() }()
+	// Until it serves, a new server is the first the kernel stops when the
+	// servers run out of memory, not one that serves already.
+	_ = os.WriteFile(fmt.Sprintf("/proc/%d/oom_score_adj", cmd.Process.Pid), []byte("500"), 0o644)
 	if err := os.WriteFile(s.pidFile(name)+".config", []byte(configKey(spec)), 0o600); err != nil {
 		return err
 	}
