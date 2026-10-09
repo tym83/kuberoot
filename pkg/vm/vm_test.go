@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -68,5 +69,21 @@ func TestTwoPrimariesOnlyWhileMoving(t *testing.T) {
 	s.AllowTwoPrimaries = true
 	if !strings.Contains(v.ResConfig("web", s, "/dev/loop0"), "allow-two-primaries yes;") {
 		t.Error("two primaries not allowed during a move")
+	}
+}
+
+func TestStatusReceiveFailed(t *testing.T) {
+	RunDir = t.TempDir()
+	m := &Machines{}
+	s := node.MachineSpec{Running: true, Receive: "tcp:0.0.0.0:9001"}
+	if err := os.WriteFile(m.mark("demo", "failed"), []byte("Error: connection refused\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if st := m.Status("demo", s); st.Phase != "Failed" || st.Message != "receiving: Error: connection refused" {
+		t.Fatalf("got %+v", st)
+	}
+	s.Receive = ""
+	if st := m.Status("demo", s); st.Phase != "Starting" {
+		t.Fatalf("an ordinary start reported %+v", st)
 	}
 }

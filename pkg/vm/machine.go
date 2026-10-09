@@ -109,6 +109,8 @@ func (m *Machines) Apply(ctx context.Context, name string, s node.MachineSpec) e
 		return nil // the machine went on to another node
 	case exists(m.mark(name, "receiving")):
 		return nil // arriving
+	case s.Receive != "" && exists(m.mark(name, "failed")):
+		return nil // left for the controller to see the move failed
 	case s.Running && pid == 0 && s.Receive != "":
 		return m.receive(name, s)
 	case s.Running && pid == 0:
@@ -145,13 +147,14 @@ func (m *Machines) receive(name string, s node.MachineSpec) error {
 	for i := 0; i < 50 && !exists(m.socket(name)); i++ {
 		time.Sleep(100 * time.Millisecond)
 	}
+	_ = os.Remove(m.mark(name, "failed"))
 	if err := os.WriteFile(m.mark(name, "receiving"), nil, 0o600); err != nil {
 		return err
 	}
 	go func() {
 		out, err := exec.Command("/usr/bin/ch-remote", "--api-socket", m.socket(name), "receive-migration", "receiver_url="+s.Receive).CombinedOutput()
 		if err != nil {
-			_ = os.WriteFile(m.consoleLog(name)+".vmm", append([]byte("receive-migration: "), out...), 0o600)
+			_ = os.WriteFile(m.mark(name, "failed"), out, 0o600)
 			if pid := m.pid(name); pid != 0 {
 				_ = syscall.Kill(pid, syscall.SIGKILL)
 			}
@@ -302,6 +305,9 @@ func (m *Machines) Status(name string, s node.MachineSpec) node.MachineStatus {
 	if exists(m.mark(name, "sent")) {
 		return node.MachineStatus{Phase: "Sent", Message: "the machine runs on the node it was sent to"}
 	}
+	if pid == 0 && s.Receive != "" && exists(m.mark(name, "failed")) {
+		return node.MachineStatus{Phase: "Failed", Message: "receiving: " + lastLine(m.mark(name, "failed"))}
+	}
 	if pid == 0 {
 		st := node.MachineStatus{Phase: "Stopped"}
 		if s.Running {
@@ -349,7 +355,7 @@ func (m *Machines) Delete(ctx context.Context, name string) error {
 	}
 	_ = os.Remove(m.specFile(name))
 	_ = os.Remove(m.specFile(name) + ".deleting")
-	for _, f := range []string{"config", "sent", "receiving"} {
+	for _, f := range []string{"config", "sent", "receiving", "failed"} {
 		_ = os.Remove(m.mark(name, f))
 	}
 	return nil
