@@ -37,7 +37,10 @@ type Spec struct {
 	Sysctls map[string]string `json:"sysctls,omitempty"`
 	// Modules are loaded at boot, in order, from the out-of-tree modules
 	// built with the kernel; module loading is then disabled.
-	Modules []Module        `json:"modules,omitempty"`
+	Modules []Module `json:"modules,omitempty"`
+	// Kubelet holds fields of the KubeletConfiguration the distribution sets
+	// on top of the image's own, such as how the kubelet hands out CPUs.
+	Kubelet map[string]any  `json:"kubelet,omitempty"`
 	Roles   map[string]Role `json:"roles"`
 	NodeAPI NodeAPI         `json:"nodeAPI,omitempty"`
 }

@@ -118,6 +118,14 @@ var generators = map[string]func(roleContext) error{
 		if r.member != nil {
 			cfg = workerKubeletConfig(filepath.Join(clusterDir, "ca.crt"), r.net)
 		}
+		var extra map[string]any
+		if activeProfile != nil {
+			extra = activeProfile.Spec.Kubelet
+		}
+		cfg, err := withDistroKubelet(cfg, extra)
+		if err != nil {
+			return err
+		}
 		return writeFiles(map[string]string{filepath.Join(kubeDir, "kubelet.yaml"): cfg}, "/var/lib/kubelet")
 	},
 }
