@@ -110,7 +110,11 @@ func BirdConfig(c Config, routerID string) string {
 		fmt.Fprintf(&b, "\nprotocol kernel kernel_%s {\n\t%s { import none; %s };\n\tmerge paths on;\n}\n", fam, fam, kernelExport)
 	}
 	// The announced networks exist for BGP only: kept out of the kernel.
-	for fam, nets := range map[string][]string{"ipv4": v4, "ipv6": v6} {
+	for _, f := range []struct {
+		fam  string
+		nets []string
+	}{{"ipv4", v4}, {"ipv6", v6}} {
+		fam, nets := f.fam, f.nets
 		if len(nets) == 0 {
 			continue
 		}
@@ -120,9 +124,12 @@ func BirdConfig(c Config, routerID string) string {
 		}
 		b.WriteString("}\n")
 	}
+	// A prefix set holds one family.
 	b.WriteString("\nfilter announce {\n")
-	if all := append(append([]string{}, v4...), v6...); len(all) > 0 {
-		fmt.Fprintf(&b, "\tif net ~ [ %s ] then accept;\n", strings.Join(all, ", "))
+	for _, nets := range [][]string{v4, v6} {
+		if len(nets) > 0 {
+			fmt.Fprintf(&b, "\tif net ~ [ %s ] then accept;\n", strings.Join(nets, ", "))
+		}
 	}
 	b.WriteString("\treject;\n}\n")
 	imp := "import all;"

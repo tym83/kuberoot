@@ -40,7 +40,7 @@ func gateway() Config {
 
 func TestCheckKeepsValidResourcesAndNamesTheRest(t *testing.T) {
 	c := gateway()
-	c.Interfaces = append(c.Interfaces, v1.Interface{ObjectMeta: named("dup"), Spec: v1.InterfaceSpec{Link: "eth1"}})
+	c.Interfaces = append(c.Interfaces, v1.Interface{ObjectMeta: named("zz-dup"), Spec: v1.InterfaceSpec{Link: "eth1"}})
 	c.Routes = append(c.Routes, v1.Route{ObjectMeta: named("mixed"), Spec: v1.RouteSpec{Destination: "10.0.0.0/8", Gateway: "fd00::1"}})
 	c.Rules = append(c.Rules, v1.FirewallRule{ObjectMeta: named("typo"), Spec: v1.FirewallRuleSpec{From: "lna", To: "wan", Action: "Accept"}})
 	c.DHCP = append(c.DHCP, v1.DHCPServer{ObjectMeta: named("outside"), Spec: v1.DHCPServerSpec{Link: "eth1.20", RangeStart: "192.168.10.2", RangeEnd: "192.168.10.9"}})
@@ -48,7 +48,7 @@ func TestCheckKeepsValidResourcesAndNamesTheRest(t *testing.T) {
 
 	ok, problems := Check(c)
 	want := map[Ref]string{
-		{"Interface", "dup"}:      "configured by another Interface",
+		{"Interface", "zz-dup"}:   "configured by another Interface",
 		{"Route", "mixed"}:        "different families",
 		{"FirewallRule", "typo"}:  "zone lna does not exist",
 		{"DHCPServer", "outside"}: "outside 192.168.20.0/24",
@@ -155,7 +155,7 @@ func TestBirdConfig(t *testing.T) {
 		"router id 10.244.0.10;",
 		"protocol static announce_ipv4 {\n\tipv4;\n\troute 192.168.10.0/24 blackhole;",
 		"route fd00:10::/64 blackhole;",
-		"if net ~ [ 192.168.10.0/24, fd00:10::/64 ] then accept;",
+		"if net ~ [ 192.168.10.0/24 ] then accept;\n\tif net ~ [ fd00:10::/64 ] then accept;",
 		"protocol bgp peer_r2 {\n\tlocal as 65010;\n\tneighbor 10.244.0.20 as 65020;\n\tipv4 { import all; export filter announce; };",
 		"protocol bgp peer_upstream_v6 {",
 		"multihop 2;",
@@ -194,5 +194,64 @@ peer_down  BGP        ---        start  10:22:00.000  Active        Socket: Conn
 	}
 	if _, ok := got["device1"]; ok {
 		t.Error("a non-BGP protocol was taken for a session")
+	}
+}
+
+func TestCheckIsTheSameWhateverTheListOrder(t *testing.T) {
+	a := v1.FirewallZone{ObjectMeta: named("a-mgmt"), Spec: v1.FirewallZoneSpec{Links: []string{"eth0"}, Management: true}}
+	b := v1.FirewallZone{ObjectMeta: named("b-other"), Spec: v1.FirewallZoneSpec{Links: []string{"eth0"}}}
+	for _, zones := range [][]v1.FirewallZone{{a, b}, {b, a}} {
+		ok, problems := Check(Config{Zones: zones})
+		if len(ok.Zones) != 1 || ok.Zones[0].Name != "a-mgmt" || problems[Ref{"FirewallZone", "b-other"}] == "" {
+			t.Errorf("listed as %s, %s: kept %v, problems %v", zones[0].Name, zones[1].Name, ok.Zones, problems)
+		}
+	}
+}
+
+func TestCheckRefusesDuplicateRoutesAndZonedPeers(t *testing.T) {
+	c := Config{
+		Routes: []v1.Route{
+			{ObjectMeta: named("a"), Spec: v1.RouteSpec{Destination: "10.0.0.0/8", Gateway: "192.168.10.254"}},
+			{ObjectMeta: named("b"), Spec: v1.RouteSpec{Destination: "10.0.0.0/8", Gateway: "192.168.10.253"}},
+		},
+		BGP:   []v1.BGPRouter{{ObjectMeta: named("default"), Spec: v1.BGPRouterSpec{ASN: 65010}}},
+		Peers: []v1.BGPPeer{{ObjectMeta: named("ll"), Spec: v1.BGPPeerSpec{Address: "fe80::1%eth0", ASN: 65020}}},
+	}
+	ok, problems := Check(c)
+	if len(ok.Routes) != 1 || !strings.Contains(problems[Ref{"Route", "b"}], "is Route a's") {
+		t.Errorf("duplicate route: kept %d, problem %q", len(ok.Routes), problems[Ref{"Route", "b"}])
+	}
+	if len(ok.Peers) != 0 || problems[Ref{"BGPPeer", "ll"}] == "" {
+		t.Error("a peer address with a zone was accepted")
+	}
+}
+
+func TestPortForwardsLeaveTheManagementPortsAlone(t *testing.T) {
+	c := gateway()
+	c.NAT = append(c.NAT, v1.NATRule{ObjectMeta: named("grab-api"), Spec: v1.NATRuleSpec{PortForward: &v1.PortForward{InLink: "eth0", Protocol: "tcp", Port: 6443, To: "192.168.10.5"}}})
+	ok, _ := Check(c)
+	got := Ruleset(ok)
+	ret := strings.Index(got, `iifname { "eth0" } tcp dport { 6443, 50000 } return`)
+	dnat := strings.Index(got, `dport 6443 dnat`)
+	if ret < 0 || dnat < 0 || ret > dnat {
+		t.Errorf("management ports are not kept from port forwards:\n%s", got)
+	}
+}
+
+func TestMasqueradeWithoutSourcesIsIPv4(t *testing.T) {
+	c := Config{NAT: []v1.NATRule{{ObjectMeta: named("all"), Spec: v1.NATRuleSpec{Masquerade: &v1.Masquerade{OutLink: "eth0"}}}}}
+	ok, _ := Check(c)
+	if got := Ruleset(ok); !strings.Contains(got, `oifname "eth0" meta nfproto ipv4 masquerade`) {
+		t.Errorf("ruleset:\n%s", got)
+	}
+}
+
+func TestIPv6RouteWithoutMetricMatchesTheKernel(t *testing.T) {
+	r, err := kernelRoute(v1.RouteSpec{Destination: "2001:db8::/64", Gateway: "fd00::1"})
+	if err != nil || r.Priority != 1024 {
+		t.Errorf("priority %d, %v; the kernel keeps 1024", r.Priority, err)
+	}
+	if r, _ := kernelRoute(v1.RouteSpec{Destination: "10.0.0.0/8", Gateway: "192.168.10.1"}); r.Priority != 0 {
+		t.Errorf("IPv4 priority %d", r.Priority)
 	}
 }

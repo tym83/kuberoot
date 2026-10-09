@@ -165,6 +165,11 @@ func kernelRoute(s v1.RouteSpec) (*netlink.Route, error) {
 	}
 	dst := &net.IPNet{IP: p.Masked().Addr().AsSlice(), Mask: net.CIDRMask(p.Bits(), p.Addr().BitLen())}
 	r := &netlink.Route{Dst: dst, Protocol: RouteProtocol, Priority: int(s.Metric)}
+	// The kernel stores an IPv6 route of metric 0 as 1024; asked for as
+	// such, it is found again by the same key.
+	if p.Addr().Is6() && r.Priority == 0 {
+		r.Priority = 1024
+	}
 	if s.Gateway != "" {
 		r.Gw = net.ParseIP(s.Gateway)
 	}

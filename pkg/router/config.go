@@ -38,6 +38,9 @@ type Problems map[Ref]string
 // without them. Problems that depend on another resource are found against
 // the resources that are themselves valid.
 func Check(c Config) (Config, Problems) {
+	// Resources are taken by name, so of two that claim the same link the
+	// same one wins every time, whatever order they were listed in.
+	sortConfig(&c)
 	p := Problems{}
 	var ok Config
 	links := map[string]bool{}
@@ -53,11 +56,18 @@ func Check(c Config) (Config, Problems) {
 		links[i.Spec.Link] = true
 		ok.Interfaces = append(ok.Interfaces, i)
 	}
+	routeOf := map[string]string{}
 	for _, r := range c.Routes {
 		if err := checkRoute(r.Spec); err != nil {
 			p[Ref{"Route", r.Name}] = err.Error()
 			continue
 		}
+		key := fmt.Sprintf("%s/%d", mustPrefix(r.Spec.Destination), r.Spec.Metric)
+		if other, ok := routeOf[key]; ok {
+			p[Ref{"Route", r.Name}] = fmt.Sprintf("route %s, metric %d, is Route %s's", r.Spec.Destination, r.Spec.Metric, other)
+			continue
+		}
+		routeOf[key] = r.Name
 		ok.Routes = append(ok.Routes, r)
 	}
 	for _, n := range c.NAT {
@@ -115,8 +125,8 @@ func Check(c Config) (Config, Problems) {
 		ok.BGP = append(ok.BGP, b)
 	}
 	for _, peer := range c.Peers {
-		if _, err := netip.ParseAddr(peer.Spec.Address); err != nil {
-			p[Ref{"BGPPeer", peer.Name}] = fmt.Sprintf("address %q: %v", peer.Spec.Address, err)
+		if a, err := netip.ParseAddr(peer.Spec.Address); err != nil || a.Zone() != "" {
+			p[Ref{"BGPPeer", peer.Name}] = fmt.Sprintf("address %q: an IPv4 or IPv6 address without a zone", peer.Spec.Address)
 			continue
 		}
 		if len(ok.BGP) == 0 {
@@ -246,6 +256,11 @@ func checkBGP(b v1.BGPRouter) error {
 		}
 	}
 	return nil
+}
+
+func mustPrefix(s string) netip.Prefix {
+	p, _ := netip.ParsePrefix(s)
+	return p.Masked()
 }
 
 // linkNet4 is the first IPv4 network an Interface gives a link.

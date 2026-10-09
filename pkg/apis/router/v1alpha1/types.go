@@ -409,7 +409,8 @@ type BGPPeerList struct {
 // node runs it, and unless it is confirmed in time (spec.confirm set to the
 // revision status.pending names), the node goes back to the last confirmed
 // configuration. A change that cuts the administrators off undoes itself.
-// There is one, named default; without it every change is final at once.
+// There is one, named default; without it every change is final at once, so
+// deleting it ends a trial, or a rollback, by making the resources final.
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster
 // +kubebuilder:subresource:status

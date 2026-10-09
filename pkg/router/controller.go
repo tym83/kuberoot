@@ -385,13 +385,15 @@ func (c *Controller) report(ctx context.Context, l listed, problem string, apply
 		}
 	case "DHCPServer":
 		mine := leasesOn(ok, l.ref.Name, leases)
-		extra["activeLeases"] = int64(len(mine))
-		var items []any
-		for _, le := range mine {
-			u, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&le)
-			items = append(items, u)
+		extra["activeLeases"], extra["leases"] = nil, nil
+		if len(mine) > 0 {
+			items := make([]any, 0, len(mine))
+			for _, le := range mine {
+				u, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&le)
+				items = append(items, u)
+			}
+			extra["activeLeases"], extra["leases"] = int64(len(mine)), items
 		}
-		extra["leases"] = items
 	case "Safeguard":
 		extra["running"], extra["confirmed"], extra["rolledBack"] = c.trial.confirmedRev, c.trial.confirmedRev, c.trial.rolledBack
 		if c.trial.pending != "" {
@@ -458,7 +460,7 @@ func leasesOn(c Config, server string, leases []v1.Lease) []v1.Lease {
 	return out
 }
 
-func toAny(ss []string) []any {
+func toAny(ss []string) any {
 	if len(ss) == 0 {
 		return nil
 	}

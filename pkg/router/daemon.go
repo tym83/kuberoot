@@ -48,6 +48,7 @@ func (d *Daemon) Start() {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	d.cancel, d.done, d.running = cancel, make(chan struct{}), true
+	d.exitMsg = "" // a new start, with a new configuration, is judged afresh
 	go d.loop(ctx, d.done)
 }
 

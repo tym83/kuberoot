@@ -119,7 +119,8 @@ func writeNAT(b *strings.Builder, c Config) {
 			v4, v6 := splitFamilies(m.Sources)
 			switch {
 			case len(m.Sources) == 0:
-				snat = append(snat, fmt.Sprintf("oifname %q masquerade comment %q", m.OutLink, "nat "+n.Name))
+				// IPv4 only: IPv6 has addresses enough to need no NAT.
+				snat = append(snat, fmt.Sprintf("oifname %q meta nfproto ipv4 masquerade comment %q", m.OutLink, "nat "+n.Name))
 			default:
 				if len(v4) > 0 {
 					snat = append(snat, fmt.Sprintf("oifname %q ip saddr { %s } masquerade comment %q", m.OutLink, strings.Join(v4, ", "), "nat "+n.Name))
@@ -145,6 +146,12 @@ func writeNAT(b *strings.Builder, c Config) {
 	}
 	if len(dnat) > 0 {
 		b.WriteString("\tchain prerouting {\n\t\ttype nat hook prerouting priority dstnat; policy accept;\n")
+		// No port forward takes the router's API away from a management zone.
+		for _, z := range c.Zones {
+			if z.Spec.Management {
+				fmt.Fprintf(b, "\t\tiifname %s tcp dport %s return\n", quoteSet(z.Spec.Links), portSet(ManagementPorts))
+			}
+		}
 		for _, r := range dnat {
 			b.WriteString("\t\t" + r + "\n")
 		}

@@ -79,3 +79,24 @@ func TestWithoutSafeguardEveryChangeIsFinal(t *testing.T) {
 		t.Errorf("running %s, changed %v, pending %q", rev, changed, tr.pending)
 	}
 }
+
+func TestRollbackSurvivesARestart(t *testing.T) {
+	now := time.Now()
+	guard := &v1.Safeguard{ObjectMeta: named("default"), Spec: v1.SafeguardSpec{ConfirmWithin: metav1.Duration{Duration: time.Minute}}}
+	good, bad := withRoute("10.0.0.0/8"), withRoute("0.0.0.0/0")
+	var tr trial
+	tr.decide(good, Revision(good), guard, now)
+	tr.decide(bad, Revision(bad), guard, now)
+	if _, _, save := tr.decide(bad, Revision(bad), guard, now.Add(2*time.Minute)); !save {
+		t.Fatal("a rollback is not kept on disk")
+	}
+	path := filepath.Join(t.TempDir(), "confirmed.json")
+	if err := tr.save(path); err != nil {
+		t.Fatal(err)
+	}
+	var again trial
+	again.load(path)
+	if _, rev, _ := again.decide(bad, Revision(bad), guard, now.Add(3*time.Minute)); rev != Revision(good) {
+		t.Errorf("after a restart the undone revision runs again: %s", rev)
+	}
+}

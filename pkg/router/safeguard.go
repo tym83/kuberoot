@@ -83,20 +83,22 @@ func (t *trial) decide(candidate Config, rev string, guard *v1.Safeguard, now ti
 		t.pending, t.deadline = rev, now.Add(within)
 	}
 	if !now.Before(t.deadline) {
+		// Kept on disk: after a restart the undone revision stays undone.
 		t.rolledBack, t.pending, t.deadline = rev, "", time.Time{}
-		return t.confirmed, t.confirmedRev, false
+		return t.confirmed, t.confirmedRev, true
 	}
 	return candidate, rev, false
 }
 
 // savedTrial is the confirmed configuration as kept on disk.
 type savedTrial struct {
-	Revision string `json:"revision"`
-	Config   Config `json:"config"`
+	Revision   string `json:"revision"`
+	Config     Config `json:"config"`
+	RolledBack string `json:"rolledBack,omitempty"`
 }
 
 func (t *trial) save(path string) error {
-	raw, err := json.Marshal(savedTrial{t.confirmedRev, t.confirmed})
+	raw, err := json.Marshal(savedTrial{t.confirmedRev, t.confirmed, t.rolledBack})
 	if err != nil {
 		return err
 	}
@@ -114,6 +116,6 @@ func (t *trial) load(path string) {
 	}
 	var s savedTrial
 	if json.Unmarshal(raw, &s) == nil {
-		t.confirmed, t.confirmedRev = s.Config, s.Revision
+		t.confirmed, t.confirmedRev, t.rolledBack = s.Config, s.Revision, s.RolledBack
 	}
 }
