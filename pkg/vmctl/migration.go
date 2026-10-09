@@ -18,15 +18,27 @@ import (
 var MigrationTimeout = 10 * time.Minute
 
 // migrating: a live move is under way, or is asked for: the machine runs,
-// spec.node names another replica node that is up with a current copy of
-// the disk, and the last move there did not fail.
+// spec.node names another replica node with a current copy of the disk,
+// every replica node is up, and the last move there did not fail.
 func (c *Controller) migrating(m *v1.VirtualMachine, p Plan, running bool, byName map[string]Node, mine map[string]disk) bool {
 	if m.Status.Migration != nil {
 		return true
 	}
 	t := m.Spec.Node
 	return running && t != "" && t != p.Node && m.Status.Phase == "Running" && m.Status.FailedMigration != t &&
-		slices.Contains(p.ReplicaNodes, t) && byName[t].Ready && mine[t].diskState == "UpToDate"
+		slices.Contains(p.ReplicaNodes, t) && allReady(p.ReplicaNodes, byName) && mine[t].diskState == "UpToDate"
+}
+
+// allReady: the disk is writable on two nodes only while every copy of it
+// is in reach; a copy that comes back to two writers may not tell which
+// one it follows.
+func allReady(nodes []string, byName map[string]Node) bool {
+	for _, n := range nodes {
+		if !byName[n].Ready {
+			return false
+		}
+	}
+	return true
 }
 
 // migrationPort is where the target node receives the machine.
@@ -57,11 +69,15 @@ func (c *Controller) migrate(ctx context.Context, m *v1.VirtualMachine, p Plan, 
 	if time.Since(mg.StartedAt.Time) > MigrationTimeout {
 		return abort("not finished in " + MigrationTimeout.String())
 	}
-	if !byName[dst].Ready || !byName[src].Ready {
+	if !allReady(p.ReplicaNodes, byName) {
 		return abort("a node went down")
 	}
 	switch mg.Phase {
 	case "Preparing":
+		if phase, _ := c.machinePhase(ctx, dst+"."+m.Name); phase == "Deleting" {
+			st.Message = "waiting for the machine left on " + dst + " to go"
+			return st
+		}
 		if err := c.ensureVolumes(ctx, m, p, &st, byName, map[string]bool{src: true, dst: true}, true); err != nil {
 			st.Message = err.Error()
 			return st

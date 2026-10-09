@@ -102,6 +102,11 @@ resource {{.Resource}} {
 	}
 	net {
 		protocol C;
+		# Diverged copies settle themselves where one side has nothing to
+		# lose: the side that never wrote, or the one not in use.
+		after-sb-0pri discard-zero-changes;
+		after-sb-1pri discard-secondary;
+		after-sb-2pri disconnect;
 {{- if .TwoPrimaries}}
 		# A machine moves alive: for the moment it takes, both nodes hold
 		# the disk writable; only one of them runs the machine.

@@ -17,6 +17,7 @@ func TestResConfig(t *testing.T) {
 		"resource vm-web {",
 		"quorum majority;",
 		"on-no-quorum io-error;",
+		"after-sb-1pri discard-secondary;",
 		"device minor 100;\n\t\tdisk /dev/loop3;",
 		"on node-a {\n\t\tnode-id 0;\n\t\taddress 10.0.0.1:7800;",
 		"on node-b {\n\t\tnode-id 1;\n\t\taddress 10.0.0.2:7800;",

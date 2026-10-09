@@ -167,6 +167,8 @@ func (m *Machines) receive(name string, s node.MachineSpec) error {
 // send moves the running machine, alive, to a node receiving it; this
 // node's monitor stops once the machine runs there.
 func (m *Machines) send(ctx context.Context, name string, pid int, url string) error {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
 	out, err := exec.CommandContext(ctx, "/usr/bin/ch-remote", "--api-socket", m.socket(name), "send-migration", "destination_url="+url).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("send-migration: %v: %s", err, strings.TrimSpace(string(out)))
@@ -257,9 +259,15 @@ func (m *Machines) launch(name string, args []string, s node.MachineSpec) error 
 
 // stop presses the power button, and after a minute stops the monitor.
 func (m *Machines) stop(ctx context.Context, name string, pid int) error {
-	_ = exec.CommandContext(ctx, "/usr/bin/ch-remote", "--api-socket", m.socket(name), "power-button").Run()
-	for i := 0; i < 60 && m.pid(name) != 0; i++ {
-		time.Sleep(time.Second)
+	// A monitor waiting for a machine to arrive has none to power off, and
+	// answers nothing until one does.
+	if !exists(m.mark(name, "receiving")) {
+		press, cancel := context.WithTimeout(ctx, 10*time.Second)
+		_ = exec.CommandContext(press, "/usr/bin/ch-remote", "--api-socket", m.socket(name), "power-button").Run()
+		cancel()
+		for i := 0; i < 60 && m.pid(name) != 0; i++ {
+			time.Sleep(time.Second)
+		}
 	}
 	if m.pid(name) != 0 {
 		_ = syscall.Kill(pid, syscall.SIGTERM)
