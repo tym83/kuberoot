@@ -50,6 +50,9 @@ case "${1:-}" in
     prepare; sync
     tools sh -c "[ -f /work/out/$arch/vmlinuz.efi ] || { $ENV $SRC/scripts/build-kernel.sh $arch && $ENV $SRC/scripts/build-drbd.sh $arch; }"
     tools sh -c "cd $SRC && $ENV scripts/build-binaries.sh $arch"
+    if [ "${KUBEROOT_DISTRO:-edge}" = ai ]; then
+      tools sh -c "$ENV $SRC/scripts/build-llama.sh $arch"
+    fi
     alpine sh -c "$ENV KUBEROOT_VERSION=${KUBEROOT_VERSION:-} KUBEROOT_DISTRO=${KUBEROOT_DISTRO:-edge} sh $SRC/scripts/build-rootfs.sh $arch"
     tools sh -c "$ENV $SRC/scripts/build-initramfs.sh $arch" ;;
   bundle)
