@@ -81,7 +81,8 @@ spec:
   validations:
   - expression: >-
       request.operation == "CREATE" && request.resource.resource == "remedies" &&
-      request.subResource == "" && !(has(object.spec.approved) && object.spec.approved)
+      (!has(request.subResource) || request.subResource == "") &&
+      !(has(object.spec.approved) && object.spec.approved)
     message: the agent proposes remedies; it does not approve, change or remove them
 ---
 apiVersion: admissionregistration.k8s.io/v1
