@@ -149,7 +149,7 @@ func (m *Machines) receive(name string, s node.MachineSpec) error {
 		return err
 	}
 	go func() {
-		out, err := exec.Command("/usr/bin/ch-remote", "--api-socket", m.socket(name), "receive-migration", s.Receive).CombinedOutput()
+		out, err := exec.Command("/usr/bin/ch-remote", "--api-socket", m.socket(name), "receive-migration", "receiver_url="+s.Receive).CombinedOutput()
 		if err != nil {
 			_ = os.WriteFile(m.consoleLog(name)+".vmm", append([]byte("receive-migration: "), out...), 0o600)
 			if pid := m.pid(name); pid != 0 {
@@ -164,7 +164,7 @@ func (m *Machines) receive(name string, s node.MachineSpec) error {
 // send moves the running machine, alive, to a node receiving it; this
 // node's monitor stops once the machine runs there.
 func (m *Machines) send(ctx context.Context, name string, pid int, url string) error {
-	out, err := exec.CommandContext(ctx, "/usr/bin/ch-remote", "--api-socket", m.socket(name), "send-migration", url).CombinedOutput()
+	out, err := exec.CommandContext(ctx, "/usr/bin/ch-remote", "--api-socket", m.socket(name), "send-migration", "destination_url="+url).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("send-migration: %v: %s", err, strings.TrimSpace(string(out)))
 	}
