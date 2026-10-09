@@ -151,6 +151,9 @@ spec:
         - --cache-dir=/var/lib/kubepkg/cache
         # What kuberoot nodes are like, for packages that need to know.
         - --values-secret=kube-system/kuberoot-platform-values
+        # Credentials for private registries, when this Secret exists
+        # (kubernetes.io/dockerconfigjson); without it, downloads go without.
+        - --registry-secret=kube-system/kuberoot-registry-credentials
         # Pods in package namespaces run only the images their packages pin.
         - --image-policy=enforce
         - --webhook-namespace=kube-system
