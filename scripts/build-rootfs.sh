@@ -46,7 +46,7 @@ fetch "https://github.com/k3s-io/kine/releases/download/$KINE_VERSION/kine-$ARCH
 install -m 0755 "$CACHE/kine-$KINE_VERSION" $r/usr/bin/kine
 
 install -m 0755 "$OUT/kinit" $r/usr/sbin/kinit
-install -m 0755 "$OUT/kuberoot-node" "$OUT/kuberoot-installer" "$OUT/kuberoot-intents" "$OUT/kuberoot-router" "$OUT/kubepkg" "$OUT/kubepkg-operator" $r/usr/bin/
+install -m 0755 "$OUT/kuberoot-node" "$OUT/kuberoot-installer" "$OUT/kuberoot-intents" "$OUT/kuberoot-router" "$OUT/kuberoot-vmctl" "$OUT/kubepkg" "$OUT/kubepkg-operator" $r/usr/bin/
 mkdir -p $r/usr/share/kuberoot/kubepkg/crds
 cp "$OUT"/kubepkg-crds/*.yaml $r/usr/share/kuberoot/kubepkg/crds/
 cp -r "$OUT/glibc/." $r/
@@ -55,6 +55,9 @@ install -m 0644 "$ROOT/distros/$DISTRO/profile.yaml" $r/usr/share/kuberoot/profi
 # The distribution's own add-ons, next to the image's.
 if [ -d "$ROOT/distros/$DISTRO/addons" ]; then cp -r "$ROOT/distros/$DISTRO/addons/." $r/usr/share/kuberoot/addons/; fi
 install -m 0644 "$OUT/release.pub" $r/usr/share/kuberoot/release.pub
+# The distribution may fetch more (distros/<name>/extras.sh), with fetch,
+# $CACHE, $ARCH and the root at $r.
+if [ -f "$ROOT/distros/$DISTRO/extras.sh" ]; then . "$ROOT/distros/$DISTRO/extras.sh"; fi
 # Out-of-tree modules built and signed with this kernel (build-drbd.sh).
 [ -d "$OUT/modules" ] && cp -r "$OUT/modules/." $r/lib/modules/
 printf 'NAME="kuberoot"\nID=kuberoot\nPRETTY_NAME="kuberoot %s (%s)"\nVERSION_ID=%s\nHOME_URL="https://github.com/tym83/kuberoot"\n' "$VERSION" "$DISTRO" "$VERSION" > $r/etc/os-release
