@@ -293,7 +293,13 @@ func (s *Servers) Status(name string, spec node.ModelServerSpec) node.ModelServe
 	}
 	pid := s.pid(name)
 	if pid == 0 {
-		return node.ModelServerStatus{Phase: "Starting", Message: lastLine(s.LogFile(name))}
+		st := node.ModelServerStatus{Phase: "Starting", Message: lastLine(s.LogFile(name))}
+		if s.startedWith(name) == configKey(spec) {
+			// Started with these weights and settings, and gone: they do
+			// not run here. The next pass tries again.
+			st.Phase = "Failed"
+		}
+		return st
 	}
 	st := node.ModelServerStatus{Phase: "Loading", PID: int32(pid)}
 	if f := strings.Fields(s.startedWith(name)); len(f) > 1 {

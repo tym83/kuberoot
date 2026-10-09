@@ -88,3 +88,25 @@ func TestPruneKeepsCurrentAndPrevious(t *testing.T) {
 		t.Error("weights stayed after their server went")
 	}
 }
+
+func TestStatusTellsAServerThatDied(t *testing.T) {
+	dirs(t)
+	s := &Servers{}
+	spec := node.ModelServerSpec{URL: "u", SHA256: sum("v1"), Model: "m", Port: 8100}
+	if st := s.Status("m", spec); st.Phase != "Starting" {
+		t.Fatalf("never started: %+v", st)
+	}
+	if err := os.MkdirAll(RunDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(s.pidFile("m")+".config", []byte(configKey(spec)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if st := s.Status("m", spec); st.Phase != "Failed" {
+		t.Fatalf("started and gone: %+v", st)
+	}
+	spec.SHA256 = sum("v2")
+	if st := s.Status("m", spec); st.Phase != "Starting" {
+		t.Fatalf("other weights asked for: %+v", st)
+	}
+}
