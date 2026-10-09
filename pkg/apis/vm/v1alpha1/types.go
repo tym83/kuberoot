@@ -52,11 +52,11 @@ type VirtualMachineSpec struct {
 	// Running: the machine runs; false shuts it down and keeps its disk.
 	// +kubebuilder:default=true
 	Running *bool `json:"running,omitempty"`
-	// Replicas of the disk, on as many nodes; the machine can run on any
-	// of them, and moves to another when its node fails.
+	// Replicas of the disk, on as many nodes: 3, so that the machine moves
+	// when its node fails and two nodes keep the majority its disk needs to
+	// be written; or 1, a disk on one node that stays with it.
 	// +kubebuilder:default=3
-	// +kubebuilder:validation:Minimum=1
-	// +kubebuilder:validation:Maximum=3
+	// +kubebuilder:validation:Enum=1;3
 	Replicas int32 `json:"replicas,omitempty"`
 	// Node to run on, among the replicas; any when unset.
 	// +optional
@@ -86,6 +86,11 @@ type VirtualMachineStatus struct {
 	Port  int32 `json:"port,omitempty"`
 	// Moves counts the times the machine was started on another node.
 	Moves int32 `json:"moves,omitempty"`
+	// ReplicaAddresses are the replica nodes' addresses as last seen, for
+	// the disk to keep its peers while a node is away.
+	ReplicaAddresses map[string]string `json:"replicaAddresses,omitempty"`
+	// ImageWritten: the disk holds its data; the image is never written again.
+	ImageWritten bool `json:"imageWritten,omitempty"`
 }
 
 // +kubebuilder:object:root=true

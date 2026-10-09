@@ -25,7 +25,7 @@ func cluster(down string, since time.Time) []Node {
 func TestPlanPlacesReplicasAndPicksTheLeastLoaded(t *testing.T) {
 	now := time.Now()
 	m := v1.VirtualMachine{ObjectMeta: metav1.ObjectMeta{Name: "web"}, Spec: v1.VirtualMachineSpec{Replicas: 2}}
-	p := PlanFor(m, cluster("", now), map[int32]bool{100: true}, map[string]int{"a": 2, "b": 0, "c": 1}, now)
+	p := PlanFor(m, cluster("", now), map[int32]bool{100: true}, map[string]int{"a": 2, "b": 0, "c": 1}, nil, now)
 	if p.Waiting != "" || strings.Join(p.ReplicaNodes, ",") != "b,c" || p.Node != "b" {
 		t.Errorf("plan = %+v", p)
 	}
@@ -33,7 +33,7 @@ func TestPlanPlacesReplicasAndPicksTheLeastLoaded(t *testing.T) {
 		t.Errorf("minor %d, port %d, mac %s", p.Minor, p.Port, p.MAC)
 	}
 	m.Spec.Node = "a"
-	if p := PlanFor(m, cluster("", now), nil, map[string]int{"a": 5}, now); p.Node != "a" {
+	if p := PlanFor(m, cluster("", now), nil, map[string]int{"a": 5}, nil, now); p.Node != "a" {
 		t.Errorf("the asked-for node was not taken: %+v", p)
 	}
 }
@@ -41,7 +41,7 @@ func TestPlanPlacesReplicasAndPicksTheLeastLoaded(t *testing.T) {
 func TestPlanWaitsForEnoughNodes(t *testing.T) {
 	now := time.Now()
 	m := v1.VirtualMachine{ObjectMeta: metav1.ObjectMeta{Name: "db"}, Spec: v1.VirtualMachineSpec{Replicas: 3}}
-	if p := PlanFor(m, cluster("c", now), nil, nil, now); p.Waiting == "" || len(p.ReplicaNodes) != 0 {
+	if p := PlanFor(m, cluster("c", now), nil, nil, nil, now); p.Waiting == "" || len(p.ReplicaNodes) != 0 {
 		t.Errorf("planned on too few nodes: %+v", p)
 	}
 }
@@ -50,19 +50,20 @@ func TestPlanMovesOffAFailedNodeAfterTheGrace(t *testing.T) {
 	now := time.Now()
 	m := v1.VirtualMachine{ObjectMeta: metav1.ObjectMeta{Name: "db"},
 		Status: v1.VirtualMachineStatus{Node: "a", ReplicaNodes: []string{"a", "b", "c"}, Minor: 100, Port: 7800, MAC: "52:54:00:00:00:01"}}
-	if p := PlanFor(m, cluster("a", now.Add(-10*time.Second)), nil, nil, now); p.Node != "a" || p.Moved || p.Waiting == "" {
+	current := map[string]bool{"a": true, "b": true, "c": true}
+	if p := PlanFor(m, cluster("a", now.Add(-10*time.Second)), nil, nil, current, now); p.Node != "a" || p.Moved || p.Waiting == "" {
 		t.Errorf("moved within the grace: %+v", p)
 	}
-	p := PlanFor(m, cluster("a", now.Add(-time.Minute)), nil, nil, now)
+	p := PlanFor(m, cluster("a", now.Add(-time.Minute)), nil, nil, current, now)
 	if p.Node != "b" || !p.Moved || p.Minor != 100 || p.MAC != "52:54:00:00:00:01" {
 		t.Errorf("after the grace: %+v", p)
 	}
 	// A node removed from the cluster is down for good.
-	if p := PlanFor(m, cluster("", now)[1:], nil, nil, now); p.Node != "b" || !p.Moved {
+	if p := PlanFor(m, cluster("", now)[1:], nil, nil, current, now); p.Node != "b" || !p.Moved {
 		t.Errorf("node gone: %+v", p)
 	}
 	// Up again: stays where it is.
-	if p := PlanFor(m, cluster("", now), nil, nil, now); p.Node != "a" || p.Moved {
+	if p := PlanFor(m, cluster("", now), nil, nil, current, now); p.Node != "a" || p.Moved {
 		t.Errorf("node ready: %+v", p)
 	}
 }
@@ -70,5 +71,18 @@ func TestPlanMovesOffAFailedNodeAfterTheGrace(t *testing.T) {
 func TestMACIsStableAndLocal(t *testing.T) {
 	if MAC("a") != MAC("a") || MAC("a") == MAC("b") || !strings.HasPrefix(MAC("a"), "52:54:") {
 		t.Error("MAC is not stable, distinct and locally administered")
+	}
+}
+
+func TestPlanMovesOnlyToACurrentCopy(t *testing.T) {
+	now := time.Now()
+	m := v1.VirtualMachine{ObjectMeta: metav1.ObjectMeta{Name: "db"},
+		Status: v1.VirtualMachineStatus{Node: "a", ReplicaNodes: []string{"a", "b", "c"}, Minor: 100, Port: 7800}}
+	// b is resyncing: c takes the machine.
+	if p := PlanFor(m, cluster("a", now.Add(-time.Minute)), nil, nil, map[string]bool{"c": true}, now); p.Node != "c" {
+		t.Errorf("moved to %s, want the current copy on c", p.Node)
+	}
+	if p := PlanFor(m, cluster("a", now.Add(-time.Minute)), nil, nil, map[string]bool{}, now); p.Moved || p.Waiting == "" {
+		t.Errorf("moved without a current copy: %+v", p)
 	}
 }

@@ -56,7 +56,16 @@ func (v *Volumes) Save(name string, s node.VolumeSpec) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(v.specFile(name), raw, 0o600)
+	return writeAtomic(v.specFile(name), raw)
+}
+
+// writeAtomic replaces a file whole, so a reader never sees half of it.
+func writeAtomic(path string, raw []byte) error {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, raw, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 // Load reads a volume's spec.
@@ -162,11 +171,16 @@ func (v *Volumes) Apply(ctx context.Context, name string, s node.VolumeSpec) err
 		return fmt.Errorf("adjust: %v: %s", err, out)
 	}
 	st := v.Status(ctx, name)
+	if s.Primary && s.Image != "" && !exists(v.mark(name, "image")) {
+		// Never write an image over data: not over this disk's, nor over a
+		// peer's, which this one would become a copy of.
+		if st.DiskState == "UpToDate" || hasUpToDate(st.PeerDisks) {
+			return os.WriteFile(v.mark(name, "image"), nil, 0o600)
+		}
+		return v.writeImage(ctx, name, s, res)
+	}
 	switch {
 	case s.Primary && st.Role != "Primary":
-		if s.Image != "" && !exists(v.mark(name, "image")) {
-			return v.writeImage(ctx, name, s, res)
-		}
 		if out, err := drbdadm(ctx, res, "primary", r); err != nil {
 			return fmt.Errorf("primary: %v: %s", err, out)
 		}
@@ -178,12 +192,11 @@ func (v *Volumes) Apply(ctx context.Context, name string, s node.VolumeSpec) err
 	return nil
 }
 
-// writeImage makes this node the volume's source: primary by force, as no
-// node has data yet, then the image written onto the replicated device.
+// writeImage makes this node the volume's source: the image downloaded
+// first, then the node primary by force, as no node has data yet, and the
+// image written onto the replicated device. If writing fails, the node steps
+// down again, and the next pass tries anew.
 func (v *Volumes) writeImage(ctx context.Context, name string, s node.VolumeSpec, res string) error {
-	if out, err := drbdadm(ctx, res, "primary", "--force", ResourceName(name)); err != nil {
-		return fmt.Errorf("primary --force: %v: %s", err, out)
-	}
 	download := filepath.Join(v.dir(), name+".download")
 	defer os.Remove(download)
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
@@ -191,10 +204,27 @@ func (v *Volumes) writeImage(ctx context.Context, name string, s node.VolumeSpec
 	if err := fetch(ctx, s.Image, download); err != nil {
 		return fmt.Errorf("download %s: %w", s.Image, err)
 	}
+	if out, err := drbdadm(ctx, res, "primary", "--force", ResourceName(name)); err != nil {
+		return fmt.Errorf("primary --force: %v: %s", err, out)
+	}
 	if out, err := exec.CommandContext(ctx, "qemu-img", "convert", "-O", "raw", download, Device(s)).CombinedOutput(); err != nil {
+		_, _ = drbdadm(context.Background(), res, "secondary", ResourceName(name))
 		return fmt.Errorf("write the image: %v: %s", err, out)
 	}
 	return os.WriteFile(v.mark(name, "image"), nil, 0o600)
+}
+
+// ImageWritten reports whether the volume's data exists on this node: its
+// image written here, or found already on a disk.
+func (v *Volumes) ImageWritten(name string) bool { return exists(v.mark(name, "image")) }
+
+func hasUpToDate(disks map[string]string) bool {
+	for _, d := range disks {
+		if d == "UpToDate" {
+			return true
+		}
+	}
+	return false
 }
 
 // Delete takes a volume down and removes its data from this node.
@@ -241,6 +271,9 @@ func ParseStatus(raw []byte) (node.VolumeStatus, error) {
 		Connections []struct {
 			Name            string `json:"name"`
 			ConnectionState string `json:"connection-state"`
+			PeerDevices     []struct {
+				PeerDiskState string `json:"peer-disk-state"`
+			} `json:"peer_devices"`
 		} `json:"connections"`
 	}
 	if err := json.Unmarshal(raw, &res); err != nil {
@@ -251,9 +284,12 @@ func ParseStatus(raw []byte) (node.VolumeStatus, error) {
 	}
 	r := res[0]
 	st := node.VolumeStatus{Phase: "Ready", Role: r.Role, DiskState: r.Devices[0].DiskState, Quorum: r.Devices[0].Quorum,
-		Device: fmt.Sprintf("/dev/drbd%d", r.Devices[0].Minor), PeerStates: map[string]string{}}
+		Device: fmt.Sprintf("/dev/drbd%d", r.Devices[0].Minor), PeerStates: map[string]string{}, PeerDisks: map[string]string{}}
 	for _, c := range r.Connections {
 		st.PeerStates[c.Name] = c.ConnectionState
+		if len(c.PeerDevices) > 0 {
+			st.PeerDisks[c.Name] = c.PeerDevices[0].PeerDiskState
+		}
 	}
 	return st, nil
 }

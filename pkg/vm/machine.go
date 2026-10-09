@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -20,6 +21,9 @@ import (
 
 	"github.com/tym83/kuberoot/pkg/apis/node"
 )
+
+// ErrWaiting is a machine waiting for something to be ready, not failing.
+var ErrWaiting = errors.New("waiting")
 
 // Bridge joins the machines of a node to the machines' network.
 const Bridge = "vmbr0"
@@ -49,7 +53,7 @@ func (m *Machines) Save(name string, s node.MachineSpec) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(m.specFile(name), raw, 0o600)
+	return writeAtomic(m.specFile(name), raw)
 }
 
 // Load reads a machine's spec.
@@ -134,8 +138,11 @@ func (m *Machines) start(name string, s node.MachineSpec) error {
 		if err != nil {
 			return fmt.Errorf("volume %s: %w", v, err)
 		}
-		if !vs.Primary {
-			return fmt.Errorf("volume %s is not primary here", v)
+		// The disk is this node's to write once DRBD made it primary here,
+		// and holds the machine's data once its image is in.
+		st := m.Volumes.Status(context.Background(), v)
+		if !vs.Primary || st.Role != "Primary" || (vs.Image != "" && !m.Volumes.ImageWritten(v)) {
+			return fmt.Errorf("%w: volume %s is not ready here", ErrWaiting, v)
 		}
 		disks = append(disks, Device(vs))
 	}
@@ -180,7 +187,13 @@ func (m *Machines) stop(ctx context.Context, name string, pid int) error {
 		time.Sleep(3 * time.Second)
 		if m.pid(name) != 0 {
 			_ = syscall.Kill(pid, syscall.SIGKILL)
+			for i := 0; i < 10 && m.pid(name) != 0; i++ {
+				time.Sleep(time.Second)
+			}
 		}
+	}
+	if m.pid(name) != 0 {
+		return fmt.Errorf("the monitor of %s does not exit", name)
 	}
 	_ = os.Remove(m.pidFile(name))
 	return nil
@@ -227,6 +240,18 @@ func (m *Machines) Status(name string, s node.MachineSpec) node.MachineStatus {
 	return st
 }
 
+// MarkDeleting asks for a machine to be stopped and forgotten on the next
+// pass; until then it is still listed, as Deleting.
+func (m *Machines) MarkDeleting(name string) error {
+	return os.WriteFile(m.specFile(name)+".deleting", nil, 0o600)
+}
+
+// Deleting reports a machine on its way out.
+func (m *Machines) Deleting(name string) bool {
+	_, err := os.Stat(m.specFile(name) + ".deleting")
+	return err == nil
+}
+
 // Delete stops a machine and forgets it.
 func (m *Machines) Delete(ctx context.Context, name string) error {
 	if pid := m.pid(name); pid != 0 {
@@ -238,6 +263,8 @@ func (m *Machines) Delete(ctx context.Context, name string) error {
 		_ = netlink.LinkDel(l)
 	}
 	_ = os.Remove(m.specFile(name))
+	_ = os.Remove(m.specFile(name) + ".deleting")
+	_ = os.Remove(m.pidFile(name) + ".config")
 	return nil
 }
 

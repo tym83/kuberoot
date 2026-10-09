@@ -2,6 +2,7 @@ package nodeapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -21,15 +22,22 @@ import (
 )
 
 // vmHost is the node's virtual machines: their volumes and the machines,
-// kept on disk and made to match their specs every few seconds.
+// kept on disk and made to match their specs every few seconds. Each object
+// has a lock of its own: a long step on one (an image downloading, a machine
+// shutting down) holds no other back.
 type vmHost struct {
 	volumes  *vm.Volumes
 	machines *vm.Machines
-	mu       sync.Mutex // one change at a time
+	locks    sync.Map // "volume/<name>" or "machine/<name>" -> *sync.Mutex
 	errsMu   sync.Mutex
 	errs     map[string]string
 	// poke asks for a pass right away, after a change.
 	poke chan struct{}
+}
+
+func (h *vmHost) lock(key string) *sync.Mutex {
+	l, _ := h.locks.LoadOrStore(key, &sync.Mutex{})
+	return l.(*sync.Mutex)
 }
 
 func (h *vmHost) changed() {
@@ -50,25 +58,31 @@ func newVMHost(nodeName, address string) *vmHost {
 	return &vmHost{volumes: v, machines: &vm.Machines{Volumes: v}, errs: map[string]string{}, poke: make(chan struct{}, 1)}
 }
 
-// run applies every volume, then every machine, until ctx ends.
+// run applies every volume and every machine, each on its own, skipping
+// those still busy from the last pass, until ctx ends.
 func (h *vmHost) run(ctx context.Context) {
 	for {
-		h.mu.Lock()
 		for _, n := range h.volumes.Names() {
-			s, err := h.volumes.Load(n)
-			if err == nil {
-				err = h.volumes.Apply(ctx, n, s)
-			}
-			h.setErr("volume/"+n, err)
+			h.async("volume/"+n, func() error {
+				s, err := h.volumes.Load(n)
+				if err != nil {
+					return err
+				}
+				return h.volumes.Apply(ctx, n, s)
+			})
 		}
 		for _, n := range h.machines.Names() {
-			s, err := h.machines.Load(n)
-			if err == nil {
-				err = h.machines.Apply(ctx, n, s)
-			}
-			h.setErr("machine/"+n, err)
+			h.async("machine/"+n, func() error {
+				if h.machines.Deleting(n) {
+					return h.machines.Delete(ctx, n)
+				}
+				s, err := h.machines.Load(n)
+				if err != nil {
+					return err
+				}
+				return h.machines.Apply(ctx, n, s)
+			})
 		}
-		h.mu.Unlock()
 		select {
 		case <-ctx.Done():
 			return
@@ -76,6 +90,22 @@ func (h *vmHost) run(ctx context.Context) {
 		case <-time.After(10 * time.Second):
 		}
 	}
+}
+
+// async runs step for an object unless a step for it is still running.
+func (h *vmHost) async(key string, step func() error) {
+	l := h.lock(key)
+	if !l.TryLock() {
+		return
+	}
+	go func() {
+		defer l.Unlock()
+		err := step()
+		if errors.Is(err, vm.ErrWaiting) {
+			err = nil // not a failure: the next pass tries again
+		}
+		h.setErr(key, err)
+	}()
 }
 
 func (h *vmHost) setErr(key string, err error) {
@@ -138,6 +168,10 @@ func (s volumeStorage) object(ctx context.Context, name string) (*node.Volume, e
 	}
 	v := &node.Volume{ObjectMeta: metav1.ObjectMeta{Name: name, UID: types.UID(string(nodeUID()) + "-volume-" + name)}, Spec: spec,
 		Status: s.h.volumes.Status(ctx, name)}
+	v.Status.ImageWritten = s.h.volumes.ImageWritten(name)
+	if spec.Primary && spec.Image != "" && !v.Status.ImageWritten {
+		v.Status.Phase = "WritingImage"
+	}
 	if e := s.h.errOf("volume/" + name); e != "" {
 		v.Status.Phase, v.Status.Message = "Failed", e
 	}
@@ -215,8 +249,9 @@ func (s volumeStorage) Delete(ctx context.Context, name string, _ rest.ValidateO
 	if err != nil {
 		return nil, false, err
 	}
-	s.h.mu.Lock()
-	defer s.h.mu.Unlock()
+	l := s.h.lock("volume/" + name)
+	l.Lock()
+	defer l.Unlock()
 	for _, m := range s.h.machines.Names() {
 		if spec, err := s.h.machines.Load(m); err == nil {
 			for _, v := range spec.Volumes {
@@ -278,6 +313,9 @@ func (s machineStorage) object(name string) (*node.Machine, error) {
 		Status: s.h.machines.Status(name, spec)}
 	if e := s.h.errOf("machine/" + name); e != "" && m.Status.Phase != "Running" {
 		m.Status.Phase, m.Status.Message = "Failed", e
+	}
+	if s.h.machines.Deleting(name) {
+		m.Status.Phase = "Deleting"
 	}
 	m.ResourceVersion = resourceVersion(m.Spec, m.Status)
 	return m, nil
@@ -349,12 +387,12 @@ func (s machineStorage) Delete(ctx context.Context, name string, _ rest.Validate
 	if err != nil {
 		return nil, false, err
 	}
-	s.h.mu.Lock()
-	defer s.h.mu.Unlock()
-	if err := s.h.machines.Delete(ctx, name); err != nil {
+	// The machine shuts down on the node's next pass, which then forgets it.
+	if err := s.h.machines.MarkDeleting(name); err != nil {
 		return nil, false, apierrors.NewInternalError(err)
 	}
-	return obj, true, nil
+	s.h.changed()
+	return obj, false, nil
 }
 
 func (machineStorage) ConvertToTable(_ context.Context, obj runtime.Object, _ runtime.Object) (*metav1.Table, error) {

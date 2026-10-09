@@ -39,7 +39,9 @@ type Plan struct {
 
 // PlanFor decides a machine's placement. used are the minors other machines
 // hold; load counts machines per node.
-func PlanFor(vm v1.VirtualMachine, nodes []Node, used map[int32]bool, load map[string]int, now time.Time) Plan {
+// upToDate names the nodes whose copy of this machine's disk is current: a
+// machine moves only to one of them.
+func PlanFor(vm v1.VirtualMachine, nodes []Node, used map[int32]bool, load map[string]int, upToDate map[string]bool, now time.Time) Plan {
 	st := vm.Status
 	p := Plan{ReplicaNodes: st.ReplicaNodes, Node: st.Node, Minor: st.Minor, Port: st.Port, MAC: st.MAC}
 	if p.MAC == "" {
@@ -100,14 +102,15 @@ func PlanFor(vm v1.VirtualMachine, nodes []Node, used map[int32]bool, load map[s
 		p.Waiting = fmt.Sprintf("node %s is down; moving after %s", p.Node, FailoverAfter)
 		return p
 	}
-	// The node is gone: another replica takes the machine.
+	// The node is gone: a replica with a current copy of the disk takes the
+	// machine.
 	for _, r := range p.ReplicaNodes {
-		if r != p.Node && byName[r].Ready {
+		if r != p.Node && byName[r].Ready && upToDate[r] {
 			p.Node, p.Moved = r, true
 			return p
 		}
 	}
-	p.Waiting = fmt.Sprintf("node %s is down and no other replica node is ready", p.Node)
+	p.Waiting = fmt.Sprintf("node %s is down and no other node has a current copy of the disk", p.Node)
 	return p
 }
 

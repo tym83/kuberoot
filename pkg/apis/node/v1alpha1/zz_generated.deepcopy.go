@@ -1185,6 +1185,13 @@ func (in *VolumeStatus) DeepCopyInto(out *VolumeStatus) {
 			(*out)[key] = val
 		}
 	}
+	if in.PeerDisks != nil {
+		in, out := &in.PeerDisks, &out.PeerDisks
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	return
 }
 

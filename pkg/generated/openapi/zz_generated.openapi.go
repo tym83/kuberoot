@@ -2284,7 +2284,7 @@ func schema_pkg_apis_node_v1alpha1_VolumeStatus(ref common.ReferenceCallback) co
 					},
 					"peerStates": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PeerStates: the connection to each peer.",
+							Description: "PeerStates: the connection to each peer; PeerDisks: their disks.",
 							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,
@@ -2295,6 +2295,27 @@ func schema_pkg_apis_node_v1alpha1_VolumeStatus(ref common.ReferenceCallback) co
 									},
 								},
 							},
+						},
+					},
+					"peerDisks": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"imageWritten": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ImageWritten: the volume's data exists, written here or synced from a peer; an image is never written over it.",
+							Type:        []string{"boolean"},
+							Format:      "",
 						},
 					},
 				},

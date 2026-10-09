@@ -125,6 +125,13 @@ func (c *Controller) reconcile(ctx context.Context) {
 		}
 	}
 	sort.Slice(vms, func(i, j int) bool { return vms[i].CreationTimestamp.Before(&vms[j].CreationTimestamp) })
+	disks := c.listVolumes(ctx)
+	for _, d := range disks {
+		if d.minor != 0 {
+			used[d.minor] = true // minors of volumes still on nodes, orphans too
+		}
+	}
+	c.sweep(ctx, vms, nodes, disks)
 	leases := c.leases()
 	for i := range vms {
 		m := &vms[i]
@@ -136,19 +143,115 @@ func (c *Controller) reconcile(ctx context.Context) {
 			klog.Errorf("%s: %v", m.Name, err)
 			continue
 		}
-		p := PlanFor(*m, nodes, used, load, time.Now())
+		mine := map[string]disk{}
+		upToDate := map[string]bool{}
+		for _, d := range disks {
+			if d.vm == m.Name {
+				mine[d.node] = d
+				upToDate[d.node] = d.diskState == "UpToDate"
+			}
+		}
+		p := PlanFor(*m, nodes, used, load, upToDate, time.Now())
+		// The old node is back, still running the machine with its disk:
+		// the machine stays there rather than moving.
+		if old := m.Status.Node; old != "" && p.Node != old && ready(nodes, old) && mine[old].role == "Primary" {
+			p.Node, p.Moved = old, false
+		}
 		used[p.Minor] = true
-		st := c.apply(ctx, m, p, nodes)
+		st := c.apply(ctx, m, p, nodes, mine)
 		st.Address = leases[strings.ToLower(p.MAC)]
 		c.writeStatus(ctx, m, st)
 	}
 }
 
+// disk is a volume as a node reports it.
+type disk struct {
+	node, vm               string
+	minor                  int32
+	role, diskState, phase string
+	imageWritten           bool
+}
+
+// listVolumes lists the volumes of every node through the cluster's view
+// of the node APIs, where each is named <node>.<machine>.
+func (c *Controller) listVolumes(ctx context.Context) []disk {
+	list, err := c.Dynamic.Resource(volumesGVR).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		klog.Errorf("volumes: %v", err)
+		return nil
+	}
+	var out []disk
+	for _, u := range list.Items {
+		node, vmName, ok := strings.Cut(u.GetName(), ".")
+		if !ok {
+			continue
+		}
+		d := disk{node: node, vm: vmName}
+		minor, _, _ := unstructured.NestedInt64(u.Object, "spec", "minor")
+		d.minor = int32(minor)
+		d.role, _, _ = unstructured.NestedString(u.Object, "status", "role")
+		d.diskState, _, _ = unstructured.NestedString(u.Object, "status", "diskState")
+		d.phase, _, _ = unstructured.NestedString(u.Object, "status", "phase")
+		d.imageWritten, _, _ = unstructured.NestedBool(u.Object, "status", "imageWritten")
+		out = append(out, d)
+	}
+	return out
+}
+
+// sweep removes, from nodes that are up, volumes and machines no machine of
+// the cluster accounts for: left by a deletion while their node was down.
+func (c *Controller) sweep(ctx context.Context, vms []v1.VirtualMachine, nodes []Node, disks []disk) {
+	known := map[string]bool{}
+	for _, m := range vms {
+		for _, r := range m.Status.ReplicaNodes {
+			known[r+"."+m.Name] = true
+		}
+	}
+	if machines, err := c.Dynamic.Resource(machinesGVR).List(ctx, metav1.ListOptions{}); err == nil {
+		for _, u := range machines.Items {
+			node, _, _ := strings.Cut(u.GetName(), ".")
+			if !known[u.GetName()] && ready(nodes, node) {
+				klog.Infof("removing machine %s: no virtual machine has it", u.GetName())
+				_ = c.Dynamic.Resource(machinesGVR).Delete(ctx, u.GetName(), metav1.DeleteOptions{})
+			}
+		}
+	}
+	for _, d := range disks {
+		name := d.node + "." + d.vm
+		if !known[name] && ready(nodes, d.node) {
+			klog.Infof("removing volume %s: no virtual machine has it", name)
+			_ = c.Dynamic.Resource(volumesGVR).Delete(ctx, name, metav1.DeleteOptions{})
+		}
+	}
+}
+
+func ready(nodes []Node, name string) bool {
+	for _, n := range nodes {
+		if n.Name == name {
+			return n.Ready
+		}
+	}
+	return false
+}
+
 // apply makes the nodes run the plan: the disk's volume on each replica
 // node, primary where the machine runs; the machine there and nowhere else.
-func (c *Controller) apply(ctx context.Context, m *v1.VirtualMachine, p Plan, nodes []Node) v1.VirtualMachineStatus {
+func (c *Controller) apply(ctx context.Context, m *v1.VirtualMachine, p Plan, nodes []Node, mine map[string]disk) v1.VirtualMachineStatus {
 	st := v1.VirtualMachineStatus{Node: p.Node, ReplicaNodes: p.ReplicaNodes, MAC: p.MAC, Minor: p.Minor, Port: p.Port,
-		Moves: m.Status.Moves, Phase: "Pending"}
+		Moves: m.Status.Moves, Phase: "Pending", ImageWritten: m.Status.ImageWritten, ReplicaAddresses: map[string]string{}}
+	for k, v := range m.Status.ReplicaAddresses {
+		st.ReplicaAddresses[k] = v
+	}
+	for _, n := range nodes {
+		for _, r := range p.ReplicaNodes {
+			if n.Name == r && n.Address != "" {
+				st.ReplicaAddresses[r] = n.Address
+			}
+		}
+	}
+	if len(p.ReplicaNodes) > 0 && mine[p.ReplicaNodes[0]].imageWritten {
+		st.ImageWritten = true
+	}
 	if p.Moved {
 		st.Moves++
 		klog.Infof("%s: node %s is down, starting it on %s", m.Name, m.Status.Node, p.Node)
@@ -183,12 +286,14 @@ func (c *Controller) apply(ctx context.Context, m *v1.VirtualMachine, p Plan, no
 		}
 		spec := nodev1.VolumeSpec{SizeBytes: size, Minor: p.Minor, Port: p.Port, NodeID: int32(i),
 			Primary: r == p.Node && running}
-		if i == 0 {
+		// The image goes to the first replica, and only until it is in: a
+		// replica that comes back empty later syncs, never re-images.
+		if i == 0 && !st.ImageWritten {
 			spec.Image = m.Spec.Disk.Image
 		}
 		for j, peer := range p.ReplicaNodes {
 			if peer != r {
-				spec.Peers = append(spec.Peers, nodev1.VolumePeer{Node: peer, Address: byName[peer].Address, NodeID: int32(j)})
+				spec.Peers = append(spec.Peers, nodev1.VolumePeer{Node: peer, Address: st.ReplicaAddresses[peer], NodeID: int32(j)})
 			}
 		}
 		if err := c.ensure(ctx, volumesGVR, r+"."+m.Name, map[string]any{"spec": toMap(&spec)}); err != nil {
@@ -202,10 +307,11 @@ func (c *Controller) apply(ctx context.Context, m *v1.VirtualMachine, p Plan, no
 		return st
 	}
 	role, _, _ := unstructured.NestedString(vol.Object, "status", "role")
+	phase, _, _ := unstructured.NestedString(vol.Object, "status", "phase")
 	if msg, _, _ := unstructured.NestedString(vol.Object, "status", "message"); msg != "" {
 		st.Message = "volume: " + msg
 	}
-	if running && role != "Primary" {
+	if running && (role != "Primary" || phase != "Ready") {
 		st.Phase = "Starting"
 		if st.Message == "" {
 			st.Message = "waiting for the disk on " + p.Node
@@ -230,10 +336,10 @@ func (c *Controller) apply(ctx context.Context, m *v1.VirtualMachine, p Plan, no
 		st.Message = err.Error()
 		return st
 	}
-	phase, _, _ := unstructured.NestedString(got.Object, "status", "phase")
+	mphase, _, _ := unstructured.NestedString(got.Object, "status", "phase")
 	msg, _, _ := unstructured.NestedString(got.Object, "status", "message")
-	st.Phase, st.Message = phase, msg
-	if phase == "" {
+	st.Phase, st.Message = mphase, msg
+	if mphase == "" {
 		st.Phase = "Starting"
 	}
 	return st
@@ -266,14 +372,19 @@ func (c *Controller) ensure(ctx context.Context, gvr schema.GroupVersionResource
 
 // cleanup removes a deleted machine from every node, then lets it go.
 func (c *Controller) cleanup(ctx context.Context, m *v1.VirtualMachine, nodes []Node) {
-	ready := map[string]bool{}
+	exists, isReady := map[string]bool{}, map[string]bool{}
 	for _, n := range nodes {
-		ready[n.Name] = n.Ready
+		exists[n.Name], isReady[n.Name] = true, n.Ready
 	}
 	for _, r := range m.Status.ReplicaNodes {
-		if !ready[r] {
-			klog.Infof("%s: node %s is down; its copy is removed when it is back", m.Name, r)
-			continue
+		if !exists[r] {
+			continue // the node left the cluster, and its copy with it
+		}
+		if !isReady[r] {
+			// Kept until the node is back: its copy may still run.
+			c.writeStatus(ctx, m, v1.VirtualMachineStatus{Phase: "Deleting", Message: "waiting for node " + r + " to remove its copy",
+				Node: m.Status.Node, ReplicaNodes: m.Status.ReplicaNodes, Minor: m.Status.Minor, Port: m.Status.Port, MAC: m.Status.MAC})
+			return
 		}
 		_ = c.Dynamic.Resource(machinesGVR).Delete(ctx, r+"."+m.Name, metav1.DeleteOptions{})
 		if err := c.Dynamic.Resource(volumesGVR).Delete(ctx, r+"."+m.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {

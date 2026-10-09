@@ -421,8 +421,12 @@ type VolumeStatus struct {
 	DiskState string `json:"diskState,omitempty"`
 	// Quorum: this node may write.
 	Quorum bool `json:"quorum,omitempty"`
-	// PeerStates: the connection to each peer.
+	// PeerStates: the connection to each peer; PeerDisks: their disks.
 	PeerStates map[string]string `json:"peerStates,omitempty"`
+	PeerDisks  map[string]string `json:"peerDisks,omitempty"`
+	// ImageWritten: the volume's data exists, written here or synced from
+	// a peer; an image is never written over it.
+	ImageWritten bool `json:"imageWritten,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
