@@ -205,7 +205,7 @@ func (c *Controller) reconcile(ctx context.Context) {
 	}
 	failed := map[Ref]error{}
 	if running != rev {
-		undone := fmt.Errorf("revision %s was not confirmed in time; the node runs the last confirmed one, %s", rev, running)
+		undone := rolledBack{fmt.Sprintf("revision %s was not confirmed in time; the node runs the last confirmed one, %s", rev, running)}
 		for _, k := range kinds {
 			if k.Kind != "Safeguard" {
 				failed[Ref{k.Kind, "*"}] = undone
@@ -359,6 +359,9 @@ func (c *Controller) report(ctx context.Context, l listed, problem string, apply
 		cond.Status, cond.Reason, cond.Message = metav1.ConditionFalse, "Invalid", problem
 	case applyErr != nil:
 		cond.Status, cond.Reason, cond.Message = metav1.ConditionFalse, "Failed", applyErr.Error()
+		if _, undone := applyErr.(rolledBack); undone {
+			cond.Reason = "RolledBack"
+		}
 	}
 	status := map[string]any{}
 	if s, found, _ := unstructured.NestedMap(l.obj.Object, "status"); found {
@@ -465,3 +468,9 @@ func toAny(ss []string) []any {
 	}
 	return out
 }
+
+// rolledBack is why a resource does not run: its revision ran out of time
+// on trial.
+type rolledBack struct{ msg string }
+
+func (r rolledBack) Error() string { return r.msg }
