@@ -4,7 +4,7 @@
 
 kuberoot builds Kubernetes distributions that boot straight on hardware. Each one is a single image with its own Linux kernel, a small init that brings up Kubernetes, and a node that is managed through the Kubernetes API itself: there is no SSH, no shell and no separate node tool, `kubectl` reaches the node. Everything above the base is a [kubepkg](https://github.com/tym83/kubepkg) package, so a distribution is a base plus a meta package, the way a Linux distribution is a kernel plus packages.
 
-The repository builds one distribution so far, `edge`: a general-purpose cluster for one to a few nodes.
+The repository builds two distributions: `edge`, a general-purpose cluster for one to a few nodes, and `router`, Kubernetes without containers that runs a network router.
 
 > Status: experimental. The `edge` distribution passes the Kubernetes conformance suite (462 of 462 on a three-node cluster, Kubernetes 1.37.1), but the API of the node and the layout of the state may still change.
 
@@ -15,6 +15,51 @@ The repository builds one distribution so far, `edge`: a general-purpose cluster
 - **Node API**: every node serves `node.kuberoot.dev`, aggregated into the cluster API, so `kubectl get disks`, `kubectl get bootentries` or `kubectl create upgrade` act on a node. It works before a cluster exists, which is how a node is installed.
 - **Pod network**: VXLAN between nodes, or plain routes on a flat network, or none, for a CNI package such as Cilium.
 - **Packages**: the kubepkg operator runs on the control plane and installs the distribution's packages; the `edge` meta package and the platform packages live in [kubepkg-recipes](https://github.com/tym83/kubepkg-recipes).
+
+## The router distribution
+
+`router` keeps only the part of Kubernetes that holds and watches configuration: kine, the API server, a controller manager for garbage collection, and the node API. There is no kubelet, container runtime, kube-proxy or scheduler. The router's configuration is resources of `router.kuberoot.dev`, with RBAC, audit, watch and GitOps as for any resource, and `kuberoot-router` makes the node match them:
+
+| Resource | What it configures |
+|---|---|
+| `Interface` | a link's addresses and MTU, or a VLAN on a parent link |
+| `Route` | a static route |
+| `NATRule` | masquerade behind an outgoing link, or a port forwarded to a host |
+| `FirewallZone`, `FirewallRule` | zones of links, what may reach the router and what may cross between zones |
+| `DHCPServer` | DHCP on a link, and a DNS cache for it |
+| `BGPRouter`, `BGPPeer` | the router's AS and announced networks, and its BGP sessions |
+| `Safeguard` | changes on trial, undone unless confirmed in time |
+
+A home gateway, with a LAN on `eth1` behind the uplink `eth0`:
+
+```yaml
+apiVersion: router.kuberoot.dev/v1alpha1
+kind: Interface
+metadata: {name: lan}
+spec: {link: eth1, addresses: [192.168.10.1/24]}
+---
+apiVersion: router.kuberoot.dev/v1alpha1
+kind: NATRule
+metadata: {name: out}
+spec: {masquerade: {outLink: eth0, sources: [192.168.10.0/24]}}
+---
+apiVersion: router.kuberoot.dev/v1alpha1
+kind: DHCPServer
+metadata: {name: lan}
+spec: {link: eth1, rangeStart: 192.168.10.100, rangeEnd: 192.168.10.199}
+---
+apiVersion: router.kuberoot.dev/v1alpha1
+kind: FirewallZone
+metadata: {name: wan}
+spec: {links: [eth0], input: Drop, management: true}
+---
+apiVersion: router.kuberoot.dev/v1alpha1
+kind: FirewallZone
+metadata: {name: lan}
+spec: {links: [eth1], input: Accept, forwardTo: [wan]}
+```
+
+Every resource reports in its status whether the node runs it and, if not, why; interfaces report their state, DHCP servers their leases, BGP peers their sessions. The firewall filters only once a zone exists, and the router's API stays open on management zones whatever the rules say. With a `Safeguard`, every change runs on trial: unless `spec.confirm` names its revision in time, the router goes back to the last confirmed configuration, so a change that cuts the administrators off undoes itself.
 
 ## Node API
 
@@ -81,9 +126,10 @@ The node comes back as the same node, with the same name, certificates and clust
 | `cmd/kuberoot-node` | the node API server |
 | `cmd/kuberoot-installer` | the installer's console interface |
 | `cmd/kuberoot-intents` | lowers typed intents to Kubernetes primitives |
+| `cmd/kuberoot-router` | the router controller |
 | `cmd/mkimage`, `cmd/kuberoot-release` | boot media and signed releases |
 | `pkg/` | the libraries behind them |
-| `distros/edge` | the `edge` profile: services, modules, packages |
+| `distros/edge`, `distros/router` | the distributions: services, modules, add-ons, packages |
 | `kernel/` | kernel configuration and versions |
 | `rootfs/` | files of the root filesystem |
 | `scripts/` | the build steps |
