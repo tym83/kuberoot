@@ -96,7 +96,8 @@ func (m *Machines) Args(name string, s node.MachineSpec, disks []string) []strin
 	return args
 }
 
-// Apply starts a machine meant to run and stops one that is not.
+// Apply starts a machine meant to run and stops one that is not; one that
+// runs with other CPUs, memory, disks or network than asked is restarted.
 func (m *Machines) Apply(ctx context.Context, name string, s node.MachineSpec) error {
 	pid := m.pid(name)
 	switch {
@@ -104,8 +105,26 @@ func (m *Machines) Apply(ctx context.Context, name string, s node.MachineSpec) e
 		return m.start(name, s)
 	case !s.Running && pid != 0:
 		return m.stop(ctx, name, pid)
+	case s.Running && m.startedWith(name) != configKey(s):
+		if err := m.stop(ctx, name, pid); err != nil {
+			return err
+		}
+		return m.start(name, s)
 	}
 	return nil
+}
+
+// configKey is what a running machine was started with.
+func configKey(s node.MachineSpec) string {
+	return fmt.Sprintf("%d/%d/%s/%s", s.CPUs, s.MemoryMiB, strings.Join(s.Volumes, ","), s.MAC)
+}
+
+func (m *Machines) startedWith(name string) string {
+	raw, err := os.ReadFile(m.pidFile(name) + ".config")
+	if err != nil {
+		return ""
+	}
+	return string(raw)
 }
 
 func (m *Machines) start(name string, s node.MachineSpec) error {
@@ -144,6 +163,9 @@ func (m *Machines) start(name string, s node.MachineSpec) error {
 		return fmt.Errorf("start cloud-hypervisor: %w", err)
 	}
 	go func() { _ = cmd.Wait() }()
+	if err := os.WriteFile(m.pidFile(name)+".config", []byte(configKey(s)), 0o600); err != nil {
+		return err
+	}
 	return os.WriteFile(m.pidFile(name), []byte(strconv.Itoa(cmd.Process.Pid)), 0o600)
 }
 
