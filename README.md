@@ -4,7 +4,7 @@
 
 kuberoot builds Kubernetes distributions that boot straight on hardware. Each one is a single image with its own Linux kernel, a small init that brings up Kubernetes, and a node that is managed through the Kubernetes API itself: there is no SSH, no shell and no separate node tool, `kubectl` reaches the node. Everything above the base is a [kubepkg](https://github.com/tym83/kubepkg) package, so a distribution is a base plus a meta package, the way a Linux distribution is a kernel plus packages.
 
-The repository builds two distributions: `edge`, a general-purpose cluster for one to a few nodes, and `router`, Kubernetes without containers that runs a network router.
+The repository builds three distributions: `edge`, a general-purpose cluster for one to a few nodes; `router`, Kubernetes without containers that runs a network router; and `hypervisor`, virtual machines on KVM with their disks replicated between nodes, moved off a node that fails.
 
 > Status: experimental. The `edge` distribution passes the Kubernetes conformance suite (462 of 462 on a three-node cluster, Kubernetes 1.37.1), but the API of the node and the layout of the state may still change.
 
@@ -61,6 +61,25 @@ spec: {links: [eth1], input: Accept, forwardTo: [wan]}
 
 Every resource reports in its status whether the node runs it and, if not, why; interfaces report their state, DHCP servers their leases, BGP peers their sessions. The firewall filters only once a zone exists, and the router's API stays open on management zones whatever the rules say. With a `Safeguard`, every change runs on trial: unless `spec.confirm` names its revision in time, the router goes back to the last confirmed configuration, so a change that cuts the administrators off undoes itself.
 
+## The hypervisor distribution
+
+`hypervisor` runs virtual machines on KVM with cloud-hypervisor: no libvirt, and no pods. A machine is a resource of the cluster:
+
+```yaml
+apiVersion: vm.kuberoot.dev/v1alpha1
+kind: VirtualMachine
+metadata: {name: web}
+spec:
+  cpus: 2
+  memory: 2Gi
+  replicas: 3
+  disk: {size: 20Gi, image: "https://example.org/images/debian-13-uefi.qcow2"}
+```
+
+`kuberoot-vmctl`, on the control plane, places the machine's disk on as many nodes as it has replicas and the machine on one of them. The disk is a DRBD volume: every write reaches the other nodes before it is done, and a node cut off from the majority stops writing. When the machine's node has been down for half a minute, the machine starts on another node holding its disk, with the same disk and address; the node that comes back catches up and drops its copy of the machine. Machines share one network across the nodes (a bridge on each, joined by VXLAN), with a gateway on the control plane for DHCP and the way out.
+
+Each node serves its part through the node API: `volumes` (the disks on it, with their DRBD role and state), `machines` (the machines it runs) and `machines/console` (a machine's serial console). The kubelet stays for what the cluster knows of its nodes, their registration and heartbeat; no pods run.
+
 ## Node API
 
 | Resource | What it does |
@@ -73,6 +92,7 @@ Every resource reports in its status whether the node runs it and, if not, why; 
 | `upgrades` | stages a signed release into the inactive slot |
 | `memberships`, `jointickets` | joins nodes to a cluster |
 | `statebackups` | the control plane's state archives |
+| `volumes`, `machines` | virtual machines' disks and machines (hypervisor) |
 
 ## Installing and upgrading
 
@@ -127,9 +147,10 @@ The node comes back as the same node, with the same name, certificates and clust
 | `cmd/kuberoot-installer` | the installer's console interface |
 | `cmd/kuberoot-intents` | lowers typed intents to Kubernetes primitives |
 | `cmd/kuberoot-router` | the router controller |
+| `cmd/kuberoot-vmctl` | the virtual machines controller |
 | `cmd/mkimage`, `cmd/kuberoot-release` | boot media and signed releases |
 | `pkg/` | the libraries behind them |
-| `distros/edge`, `distros/router` | the distributions: services, modules, add-ons, packages |
+| `distros/` | the distributions: services, modules, add-ons, packages |
 | `kernel/` | kernel configuration and versions |
 | `rootfs/` | files of the root filesystem |
 | `scripts/` | the build steps |
