@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -16,6 +17,7 @@ func TestResConfig(t *testing.T) {
 		"resource vm-web {",
 		"quorum majority;",
 		"on-no-quorum io-error;",
+		"after-sb-1pri discard-secondary;",
 		"device minor 100;\n\t\tdisk /dev/loop3;",
 		"on node-a {\n\t\tnode-id 0;\n\t\taddress 10.0.0.1:7800;",
 		"on node-b {\n\t\tnode-id 1;\n\t\taddress 10.0.0.2:7800;",
@@ -56,5 +58,33 @@ func TestMachineArgs(t *testing.T) {
 	}
 	if len(TapName("a-very-long-machine-name-indeed")) > 15 {
 		t.Error("tap name longer than a link name may be")
+	}
+}
+
+func TestTwoPrimariesOnlyWhileMoving(t *testing.T) {
+	v := &Volumes{Node: "a", Address: "10.0.0.1"}
+	s := node.VolumeSpec{Minor: 100, Port: 7800, Peers: []node.VolumePeer{{Node: "b", Address: "10.0.0.2", NodeID: 1}}}
+	if strings.Contains(v.ResConfig("web", s, "/dev/loop0"), "allow-two-primaries") {
+		t.Error("two primaries allowed outside a move")
+	}
+	s.AllowTwoPrimaries = true
+	if !strings.Contains(v.ResConfig("web", s, "/dev/loop0"), "allow-two-primaries yes;") {
+		t.Error("two primaries not allowed during a move")
+	}
+}
+
+func TestStatusReceiveFailed(t *testing.T) {
+	RunDir = t.TempDir()
+	m := &Machines{}
+	s := node.MachineSpec{Running: true, Receive: "tcp:0.0.0.0:9001"}
+	if err := os.WriteFile(m.mark("demo", "failed"), []byte("Error: connection refused\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if st := m.Status("demo", s); st.Phase != "Failed" || st.Message != "receiving: Error: connection refused" {
+		t.Fatalf("got %+v", st)
+	}
+	s.Receive = ""
+	if st := m.Status("demo", s); st.Phase != "Starting" {
+		t.Fatalf("an ordinary start reported %+v", st)
 	}
 }

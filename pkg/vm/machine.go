@@ -105,15 +105,82 @@ func (m *Machines) Args(name string, s node.MachineSpec, disks []string) []strin
 func (m *Machines) Apply(ctx context.Context, name string, s node.MachineSpec) error {
 	pid := m.pid(name)
 	switch {
+	case exists(m.mark(name, "sent")):
+		return nil // the machine went on to another node
+	case exists(m.mark(name, "receiving")):
+		return nil // arriving
+	case s.Receive != "" && exists(m.mark(name, "failed")):
+		return nil // left for the controller to see the move failed
+	case s.Running && pid == 0 && s.Receive != "":
+		return m.receive(name, s)
 	case s.Running && pid == 0:
 		return m.start(name, s)
 	case !s.Running && pid != 0:
 		return m.stop(ctx, name, pid)
+	case s.Running && s.SendTo != "":
+		return m.send(ctx, name, pid, s.SendTo)
 	case s.Running && m.startedWith(name) != configKey(s):
 		if err := m.stop(ctx, name, pid); err != nil {
 			return err
 		}
 		return m.start(name, s)
+	}
+	return nil
+}
+
+func (m *Machines) mark(name, what string) string { return m.pidFile(name) + "." + what }
+
+// receive starts an empty monitor that takes a running machine arriving
+// from another node, and goes on running it.
+func (m *Machines) receive(name string, s node.MachineSpec) error {
+	if _, err := m.disks(s); err != nil {
+		return err
+	}
+	if s.MAC != "" {
+		if err := ensureTap(TapName(name)); err != nil {
+			return err
+		}
+	}
+	if err := m.launch(name, []string{"--api-socket", "path=" + m.socket(name)}, s); err != nil {
+		return err
+	}
+	for i := 0; i < 50 && !exists(m.socket(name)); i++ {
+		time.Sleep(100 * time.Millisecond)
+	}
+	_ = os.Remove(m.mark(name, "failed"))
+	if err := os.WriteFile(m.mark(name, "receiving"), nil, 0o600); err != nil {
+		return err
+	}
+	go func() {
+		out, err := exec.Command("/usr/bin/ch-remote", "--api-socket", m.socket(name), "receive-migration", "receiver_url="+s.Receive).CombinedOutput()
+		if err != nil {
+			_ = os.WriteFile(m.mark(name, "failed"), out, 0o600)
+			if pid := m.pid(name); pid != 0 {
+				_ = syscall.Kill(pid, syscall.SIGKILL)
+			}
+		}
+		_ = os.Remove(m.mark(name, "receiving"))
+	}()
+	return nil
+}
+
+// send moves the running machine, alive, to a node receiving it; this
+// node's monitor stops once the machine runs there.
+func (m *Machines) send(ctx context.Context, name string, pid int, url string) error {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "/usr/bin/ch-remote", "--api-socket", m.socket(name), "send-migration", "destination_url="+url).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("send-migration: %v: %s", err, strings.TrimSpace(string(out)))
+	}
+	if err := os.WriteFile(m.mark(name, "sent"), nil, 0o600); err != nil {
+		return err
+	}
+	for i := 0; i < 10 && m.pid(name) != 0; i++ {
+		time.Sleep(time.Second)
+	}
+	if m.pid(name) != 0 {
+		_ = syscall.Kill(pid, syscall.SIGTERM)
 	}
 	return nil
 }
@@ -132,25 +199,39 @@ func (m *Machines) startedWith(name string) string {
 }
 
 func (m *Machines) start(name string, s node.MachineSpec) error {
-	var disks []string
-	for _, v := range s.Volumes {
-		vs, err := m.Volumes.Load(v)
-		if err != nil {
-			return fmt.Errorf("volume %s: %w", v, err)
-		}
-		// The disk is this node's to write once DRBD made it primary here,
-		// and holds the machine's data once its image is in.
-		st := m.Volumes.Status(context.Background(), v)
-		if !vs.Primary || st.Role != "Primary" || (vs.Image != "" && !m.Volumes.ImageWritten(v)) {
-			return fmt.Errorf("%w: volume %s is not ready here", ErrWaiting, v)
-		}
-		disks = append(disks, Device(vs))
+	disks, err := m.disks(s)
+	if err != nil {
+		return err
 	}
 	if s.MAC != "" {
 		if err := ensureTap(TapName(name)); err != nil {
 			return err
 		}
 	}
+	return m.launch(name, m.Args(name, s, disks), s)
+}
+
+// disks are a machine's volumes as devices, once they are ready here.
+func (m *Machines) disks(s node.MachineSpec) ([]string, error) {
+	var disks []string
+	for _, v := range s.Volumes {
+		vs, err := m.Volumes.Load(v)
+		if err != nil {
+			return nil, fmt.Errorf("volume %s: %w", v, err)
+		}
+		// The disk is this node's to write once DRBD made it primary here,
+		// and holds the machine's data once its image is in.
+		st := m.Volumes.Status(context.Background(), v)
+		if !vs.Primary || st.Role != "Primary" || (vs.Image != "" && !m.Volumes.ImageWritten(v)) {
+			return nil, fmt.Errorf("%w: volume %s is not ready here", ErrWaiting, v)
+		}
+		disks = append(disks, Device(vs))
+	}
+	return disks, nil
+}
+
+// launch runs cloud-hypervisor for a machine, in a session of its own.
+func (m *Machines) launch(name string, args []string, s node.MachineSpec) error {
 	for _, d := range []string{RunDir, filepath.Dir(m.consoleLog(name))} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			return err
@@ -162,7 +243,7 @@ func (m *Machines) start(name string, s node.MachineSpec) error {
 		return err
 	}
 	defer log.Close()
-	cmd := exec.Command("/usr/bin/cloud-hypervisor", m.Args(name, s, disks)...)
+	cmd := exec.Command("/usr/bin/cloud-hypervisor", args...)
 	cmd.Stdout, cmd.Stderr = log, log
 	// A session of its own: the machine outlives the node API.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
@@ -178,9 +259,15 @@ func (m *Machines) start(name string, s node.MachineSpec) error {
 
 // stop presses the power button, and after a minute stops the monitor.
 func (m *Machines) stop(ctx context.Context, name string, pid int) error {
-	_ = exec.CommandContext(ctx, "/usr/bin/ch-remote", "--api-socket", m.socket(name), "power-button").Run()
-	for i := 0; i < 60 && m.pid(name) != 0; i++ {
-		time.Sleep(time.Second)
+	// A monitor waiting for a machine to arrive has none to power off, and
+	// answers nothing until one does.
+	if !exists(m.mark(name, "receiving")) {
+		press, cancel := context.WithTimeout(ctx, 10*time.Second)
+		_ = exec.CommandContext(press, "/usr/bin/ch-remote", "--api-socket", m.socket(name), "power-button").Run()
+		cancel()
+		for i := 0; i < 60 && m.pid(name) != 0; i++ {
+			time.Sleep(time.Second)
+		}
 	}
 	if m.pid(name) != 0 {
 		_ = syscall.Kill(pid, syscall.SIGTERM)
@@ -223,6 +310,12 @@ func (m *Machines) pid(name string) int {
 // Status reports whether a machine runs.
 func (m *Machines) Status(name string, s node.MachineSpec) node.MachineStatus {
 	pid := m.pid(name)
+	if exists(m.mark(name, "sent")) {
+		return node.MachineStatus{Phase: "Sent", Message: "the machine runs on the node it was sent to"}
+	}
+	if pid == 0 && s.Receive != "" && exists(m.mark(name, "failed")) {
+		return node.MachineStatus{Phase: "Failed", Message: "receiving: " + lastLine(m.mark(name, "failed"))}
+	}
 	if pid == 0 {
 		st := node.MachineStatus{Phase: "Stopped"}
 		if s.Running {
@@ -233,6 +326,12 @@ func (m *Machines) Status(name string, s node.MachineSpec) node.MachineStatus {
 		return st
 	}
 	st := node.MachineStatus{Phase: "Running", PID: int32(pid)}
+	switch {
+	case exists(m.mark(name, "receiving")):
+		st.Phase = "Receiving"
+	case s.SendTo != "":
+		st.Phase = "Sending"
+	}
 	if info, err := os.Stat(fmt.Sprintf("/proc/%d", pid)); err == nil {
 		t := metav1.NewTime(info.ModTime())
 		st.StartedAt = &t
@@ -264,7 +363,9 @@ func (m *Machines) Delete(ctx context.Context, name string) error {
 	}
 	_ = os.Remove(m.specFile(name))
 	_ = os.Remove(m.specFile(name) + ".deleting")
-	_ = os.Remove(m.pidFile(name) + ".config")
+	for _, f := range []string{"config", "sent", "receiving", "failed"} {
+		_ = os.Remove(m.mark(name, f))
+	}
 	return nil
 }
 

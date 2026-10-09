@@ -1071,6 +1071,20 @@ func schema_pkg_apis_node_v1alpha1_MachineSpec(ref common.ReferenceCallback) com
 							Format:      "",
 						},
 					},
+					"receive": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Receive starts the machine empty, waiting for a running machine to arrive at this URL (tcp:<address>:<port>) and go on from there.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"sendTo": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SendTo sends the running machine, alive, to a node receiving it at this URL; the machine then runs there, and stops here.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"cpus", "memoryMiB", "volumes", "running"},
 			},
@@ -1086,7 +1100,7 @@ func schema_pkg_apis_node_v1alpha1_MachineStatus(ref common.ReferenceCallback) c
 				Properties: map[string]spec.Schema{
 					"phase": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Phase: Running, Stopped or Failed.",
+							Description: "Phase: Starting, Running, Receiving, Sending, Sent, Stopped or Failed.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -2216,6 +2230,13 @@ func schema_pkg_apis_node_v1alpha1_VolumeSpec(ref common.ReferenceCallback) comm
 					"primary": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Primary: this node writes to the volume (runs the machine using it).",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"allowTwoPrimaries": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AllowTwoPrimaries lets a second node write while a machine moves between them alive; only one of them runs it at any moment.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},

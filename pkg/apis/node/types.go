@@ -399,6 +399,9 @@ type VolumeSpec struct {
 	Peers []VolumePeer `json:"peers,omitempty"`
 	// Primary: this node writes to the volume (runs the machine using it).
 	Primary bool `json:"primary,omitempty"`
+	// AllowTwoPrimaries lets a second node write while a machine moves
+	// between them alive; only one of them runs it at any moment.
+	AllowTwoPrimaries bool `json:"allowTwoPrimaries,omitempty"`
 	// Image is written onto the volume when it is created, here: a URL of a
 	// qcow2 or raw disk image. Only one node of a volume gets an image.
 	Image string `json:"image,omitempty"`
@@ -458,10 +461,16 @@ type MachineSpec struct {
 	MAC string `json:"mac,omitempty"`
 	// Running: the machine is started when true and shut down when false.
 	Running bool `json:"running"`
+	// Receive starts the machine empty, waiting for a running machine to
+	// arrive at this URL (tcp:<address>:<port>) and go on from there.
+	Receive string `json:"receive,omitempty"`
+	// SendTo sends the running machine, alive, to a node receiving it at
+	// this URL; the machine then runs there, and stops here.
+	SendTo string `json:"sendTo,omitempty"`
 }
 
 type MachineStatus struct {
-	// Phase: Running, Stopped or Failed.
+	// Phase: Starting, Running, Receiving, Sending, Sent, Stopped or Failed.
 	Phase     string       `json:"phase,omitempty"`
 	Message   string       `json:"message,omitempty"`
 	PID       int32        `json:"pid,omitempty"`

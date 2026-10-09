@@ -239,6 +239,9 @@ func ready(nodes []Node, name string) bool {
 func (c *Controller) apply(ctx context.Context, m *v1.VirtualMachine, p Plan, nodes []Node, mine map[string]disk) v1.VirtualMachineStatus {
 	st := v1.VirtualMachineStatus{Node: p.Node, ReplicaNodes: p.ReplicaNodes, MAC: p.MAC, Minor: p.Minor, Port: p.Port,
 		Moves: m.Status.Moves, Phase: "Pending", ImageWritten: m.Status.ImageWritten, ReplicaAddresses: map[string]string{}}
+	if m.Status.FailedMigration == m.Spec.Node {
+		st.FailedMigration = m.Status.FailedMigration
+	}
 	for k, v := range m.Status.ReplicaAddresses {
 		st.ReplicaAddresses[k] = v
 	}
@@ -268,6 +271,9 @@ func (c *Controller) apply(ctx context.Context, m *v1.VirtualMachine, p Plan, no
 	for _, n := range nodes {
 		byName[n.Name] = n
 	}
+	if c.migrating(m, p, running, byName, mine) {
+		return c.migrate(ctx, m, p, st, byName, mine)
+	}
 	// Machines first leave the nodes they no longer run on, so the volume
 	// there can step down.
 	for _, r := range p.ReplicaNodes {
@@ -275,31 +281,13 @@ func (c *Controller) apply(ctx context.Context, m *v1.VirtualMachine, p Plan, no
 			_ = c.Dynamic.Resource(machinesGVR).Delete(ctx, r+"."+m.Name, metav1.DeleteOptions{})
 		}
 	}
-	size := m.Spec.Disk.Size.Value()
-	if size == 0 {
-		size = 4 << 30
+	primary := map[string]bool{}
+	if running {
+		primary[p.Node] = true
 	}
-	for i, r := range p.ReplicaNodes {
-		n := byName[r]
-		if !n.Ready {
-			continue
-		}
-		spec := nodev1.VolumeSpec{SizeBytes: size, Minor: p.Minor, Port: p.Port, NodeID: int32(i),
-			Primary: r == p.Node && running}
-		// The image goes to the first replica, and only until it is in: a
-		// replica that comes back empty later syncs, never re-images.
-		if i == 0 && !st.ImageWritten {
-			spec.Image = m.Spec.Disk.Image
-		}
-		for j, peer := range p.ReplicaNodes {
-			if peer != r {
-				spec.Peers = append(spec.Peers, nodev1.VolumePeer{Node: peer, Address: st.ReplicaAddresses[peer], NodeID: int32(j)})
-			}
-		}
-		if err := c.ensure(ctx, volumesGVR, r+"."+m.Name, map[string]any{"spec": toMap(&spec)}); err != nil {
-			st.Message = fmt.Sprintf("volume on %s: %v", r, err)
-			return st
-		}
+	if err := c.ensureVolumes(ctx, m, p, &st, byName, primary, bothPrimary(mine)); err != nil {
+		st.Message = err.Error()
+		return st
 	}
 	vol, err := c.Dynamic.Resource(volumesGVR).Get(ctx, p.Node+"."+m.Name, metav1.GetOptions{})
 	if err != nil {
@@ -318,15 +306,7 @@ func (c *Controller) apply(ctx context.Context, m *v1.VirtualMachine, p Plan, no
 		}
 		return st
 	}
-	mem := m.Spec.Memory.Value() >> 20
-	if mem == 0 {
-		mem = 512
-	}
-	cpus := m.Spec.CPUs
-	if cpus == 0 {
-		cpus = 1
-	}
-	machine := nodev1.MachineSpec{CPUs: cpus, MemoryMiB: mem, Volumes: []string{m.Name}, MAC: p.MAC, Running: running}
+	machine := machineSpec(m, p, running)
 	if err := c.ensure(ctx, machinesGVR, p.Node+"."+m.Name, map[string]any{"spec": toMap(&machine)}); err != nil {
 		st.Message = fmt.Sprintf("machine on %s: %v", p.Node, err)
 		return st
@@ -555,4 +535,60 @@ func normalize(m map[string]any) map[string]any {
 		}
 	}
 	return out
+}
+
+// machineSpec is a machine as its node runs it.
+func machineSpec(m *v1.VirtualMachine, p Plan, running bool) nodev1.MachineSpec {
+	mem := m.Spec.Memory.Value() >> 20
+	if mem == 0 {
+		mem = 512
+	}
+	cpus := m.Spec.CPUs
+	if cpus == 0 {
+		cpus = 1
+	}
+	return nodev1.MachineSpec{CPUs: cpus, MemoryMiB: mem, Volumes: []string{m.Name}, MAC: p.MAC, Running: running}
+}
+
+// bothPrimary: the disk is still writable on two nodes, after a live move or
+// one abandoned; it stays allowed to be until one of them steps down.
+func bothPrimary(mine map[string]disk) bool {
+	n := 0
+	for _, d := range mine {
+		if d.role == "Primary" {
+			n++
+		}
+	}
+	return n > 1
+}
+
+// ensureVolumes keeps the machine's disk on every replica node that is up,
+// primary on the nodes named, writable on two at once while it moves.
+func (c *Controller) ensureVolumes(ctx context.Context, m *v1.VirtualMachine, p Plan, st *v1.VirtualMachineStatus,
+	byName map[string]Node, primary map[string]bool, twoPrimaries bool) error {
+	size := m.Spec.Disk.Size.Value()
+	if size == 0 {
+		size = 4 << 30
+	}
+	for i, r := range p.ReplicaNodes {
+		if !byName[r].Ready {
+			continue
+		}
+		spec := nodev1.VolumeSpec{SizeBytes: size, Minor: p.Minor, Port: p.Port, NodeID: int32(i),
+			Primary: primary[r], AllowTwoPrimaries: twoPrimaries}
+		// The image goes to the first replica, and only until it is in: a
+		// replica that comes back empty later syncs, never re-images.
+		if i == 0 && !st.ImageWritten {
+			spec.Image = m.Spec.Disk.Image
+		}
+		for j, peer := range p.ReplicaNodes {
+			if peer != r {
+				spec.Peers = append(spec.Peers, nodev1.VolumePeer{Node: peer, Address: st.ReplicaAddresses[peer], NodeID: int32(j)})
+			}
+		}
+		if err := c.ensure(ctx, volumesGVR, r+"."+m.Name, map[string]any{"spec": toMap(&spec)}); err != nil {
+			return fmt.Errorf("volume on %s: %w", r, err)
+		}
+	}
+	return nil
 }
