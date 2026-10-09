@@ -1,0 +1,86 @@
+# Image registry for images built in the cluster, so
+# nodes pull them from here and nothing is published outside the cluster.
+# Pushes and pulls need the password in Secret kuberoot-registry-auth.
+# REGISTRY_HOST is the registry's public name, under the tenant's domain:
+#   sed "s/REGISTRY_HOST/registry.example.org/" hack/hetzner/registry.yaml | kubectl apply -f -
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kuberoot-registry
+  namespace: tenant-kuberoot
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: replicated
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry
+  namespace: tenant-kuberoot
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: kuberoot-registry}
+  template:
+    metadata:
+      labels: {app: kuberoot-registry}
+    spec:
+      containers:
+      - name: registry
+        image: registry:2
+        env:
+        - {name: REGISTRY_AUTH, value: htpasswd}
+        - {name: REGISTRY_AUTH_HTPASSWD_REALM, value: kuberoot}
+        - {name: REGISTRY_AUTH_HTPASSWD_PATH, value: /auth/htpasswd}
+        - {name: REGISTRY_STORAGE_DELETE_ENABLED, value: "true"}
+        ports:
+        - containerPort: 5000
+        resources:
+          requests: {cpu: 50m, memory: 64Mi}
+          limits: {cpu: "1", memory: 512Mi}
+        volumeMounts:
+        - {name: data, mountPath: /var/lib/registry}
+        - {name: auth, mountPath: /auth, readOnly: true}
+      volumes:
+      - name: data
+        persistentVolumeClaim: {claimName: kuberoot-registry}
+      - name: auth
+        secret: {secretName: kuberoot-registry-auth}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: registry
+  namespace: tenant-kuberoot
+spec:
+  selector: {app: kuberoot-registry}
+  ports:
+  - {port: 5000}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: registry
+  namespace: tenant-kuberoot
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+spec:
+  ingressClassName: tenant-root
+  tls:
+  - hosts: [REGISTRY_HOST]
+    secretName: registry-tls
+  rules:
+  - host: REGISTRY_HOST
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service: {name: registry, port: {number: 5000}}

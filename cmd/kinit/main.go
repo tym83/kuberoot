@@ -1,67 +1,22 @@
-// Command kinit is PID 1 of every kuberoot distro: it prepares the kernel
-// interfaces a Kubernetes node needs and supervises the node services.
+// Command kinit is PID 1 of every kuberoot distro.
+//
+// Stage one runs from the initramfs: it mounts the read-only root filesystem
+// image and switches into it. Stage two runs from that root: it prepares the
+// kernel interfaces a Kubernetes node needs and supervises the node services.
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
-	"syscall"
+	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/sys/unix"
 )
 
-type mount struct {
-	source, target, fstype string
-	flags                  uintptr
-	data                   string
-}
-
-var mounts = []mount{
-	{"proc", "/proc", "proc", unix.MS_NOSUID | unix.MS_NODEV | unix.MS_NOEXEC, ""},
-	{"sysfs", "/sys", "sysfs", unix.MS_NOSUID | unix.MS_NODEV | unix.MS_NOEXEC, ""},
-	{"devtmpfs", "/dev", "devtmpfs", unix.MS_NOSUID, "mode=0755"},
-	{"devpts", "/dev/pts", "devpts", unix.MS_NOSUID | unix.MS_NOEXEC, "gid=5,mode=0620,ptmxmode=0666"},
-	{"tmpfs", "/dev/shm", "tmpfs", unix.MS_NOSUID | unix.MS_NODEV, "mode=1777"},
-	{"tmpfs", "/run", "tmpfs", unix.MS_NOSUID | unix.MS_NODEV, "mode=0755"},
-	{"tmpfs", "/tmp", "tmpfs", unix.MS_NOSUID | unix.MS_NODEV, "mode=1777"},
-	{"cgroup2", "/sys/fs/cgroup", "cgroup2", unix.MS_NOSUID | unix.MS_NODEV | unix.MS_NOEXEC, "nsdelegate"},
-	{"bpf", "/sys/fs/bpf", "bpf", unix.MS_NOSUID | unix.MS_NODEV | unix.MS_NOEXEC, "mode=0700"},
-}
-
-func mountAll() error {
-	for _, m := range mounts {
-		if err := os.MkdirAll(m.target, 0o755); err != nil {
-			return fmt.Errorf("mkdir %s: %w", m.target, err)
-		}
-		err := unix.Mount(m.source, m.target, m.fstype, m.flags, m.data)
-		if err != nil && err != unix.EBUSY {
-			return fmt.Errorf("mount %s: %w", m.target, err)
-		}
-	}
-	return nil
-}
-
-func uptime() time.Duration {
-	var info unix.Sysinfo_t
-	if unix.Sysinfo(&info) != nil {
-		return 0
-	}
-	return time.Duration(info.Uptime) * time.Second
-}
-
-// reap collects orphaned children; as PID 1 nobody else will.
-func reap() {
-	for {
-		var ws unix.WaitStatus
-		pid, err := unix.Wait4(-1, &ws, unix.WNOHANG, nil)
-		if pid <= 0 || err != nil {
-			return
-		}
-	}
-}
+const rootImage = "/rootfs.squashfs"
 
 func main() {
 	log.SetFlags(0)
@@ -69,36 +24,174 @@ func main() {
 	if os.Getpid() != 1 {
 		log.Fatal("must run as PID 1")
 	}
+	if isInitramfs() {
+		if err := switchRoot(); err != nil {
+			log.Fatalf("switch root: %v", err)
+		}
+		return // unreachable: switchRoot execs stage two
+	}
+	if err := boot(); err != nil {
+		log.Printf("boot failed: %v", err)
+	}
+	waitForSignals()
+}
+
+// isInitramfs tells stage one from stage two: only the initramfs has /newroot.
+func isInitramfs() bool {
+	_, err := os.Stat(newRoot)
+	return err == nil
+}
+
+func boot() error {
 	if err := mountAll(); err != nil {
-		log.Fatalf("mount: %v", err)
+		return err
 	}
 	var uts unix.Utsname
 	_ = unix.Uname(&uts)
 	log.Printf("kuberoot booting, kernel %s, uptime %s", unix.ByteSliceToString(uts.Release[:]), uptime())
 
-	if err := setupNetwork(); err != nil {
-		log.Printf("network: %v", err)
+	waitForEntropy()
+	cfg := loadCmdline()
+	podNetworkMode = cfg.podNetwork
+	activeProfile = loadProfileOrRescue()
+	loadModulesAndLock(activeProfile.Spec.Modules)
+	if err := applySysctls(activeProfile.Spec.Sysctls); err != nil {
+		log.Printf("sysctls: %v", err)
 	}
+	go watchPowerButton()
+	go probationWatchdog()
 
-	sigs := make(chan os.Signal, 1)
+	// Nothing below gives up: an edge node often comes up before its network,
+	// and a node that stops trying can only be fixed by hand.
+	var node nodeInfo
+	retry("network", func() error {
+		var err error
+		node, err = setupNetwork(cfg)
+		return err
+	})
+	retry("hostname", func() error { return setHostname(node) })
+
+	lifecycle.Lock()
+	defer lifecycle.Unlock()
+	var services []service
+	var controlPlane bool
+	retry("node configuration", func() error {
+		var err error
+		services, controlPlane, err = configure(node, cfg)
+		return err
+	})
+	if cfg.dev {
+		printNodeKubeconfig()
+	}
+	serveControl(func() { reconfigure(node, cfg) })
+	startServices(services, cfg)
+	if controlPlane {
+		go applyAddons(generation(), cfg, node)
+	}
+	return nil
+}
+
+// retry runs step until it succeeds, backing off up to a minute between tries.
+func retry(what string, step func() error) {
+	backoff := 2 * time.Second
+	for attempt := 1; ; attempt++ {
+		err := step()
+		if err == nil {
+			return
+		}
+		log.Printf("%s failed (attempt %d), retrying in %s: %v", what, attempt, backoff, err)
+		time.Sleep(backoff)
+		backoff = min(backoff*2, time.Minute)
+	}
+}
+
+// waitForEntropy says so on the console when the kernel random pool is not ready:
+// key generation would block silently on hardware without an RNG source.
+func waitForEntropy() {
+	buf := make([]byte, 1)
+	if _, err := unix.Getrandom(buf, unix.GRND_NONBLOCK); err != unix.EAGAIN {
+		return
+	}
+	log.Printf("waiting for the kernel random pool (no hardware RNG?)")
+	_, _ = unix.Getrandom(buf, 0)
+	log.Printf("random pool ready, uptime %s", uptime())
+}
+
+// lifecycle serialises everything that starts or stops the node's services:
+// boot, role switches and shutdown.
+var (
+	lifecycle    sync.Mutex
+	shuttingDown bool
+)
+
+// waitForSignals reaps children and turns termination signals into a shutdown.
+// The shutdown runs elsewhere: it waits for services to exit, and only this
+// loop reaps them.
+func waitForSignals() {
+	sigs := make(chan os.Signal, 16)
 	signal.Notify(sigs, unix.SIGCHLD, unix.SIGTERM, unix.SIGINT, unix.SIGPWR)
-	log.Printf("ready")
 	for sig := range sigs {
 		switch sig {
 		case unix.SIGCHLD:
 			reap()
+		case unix.SIGINT:
+			go shutdown(unix.LINUX_REBOOT_CMD_RESTART, "SIGINT")
 		default:
-			shutdown(sig.(syscall.Signal))
+			go shutdown(unix.LINUX_REBOOT_CMD_POWER_OFF, sig.String())
 		}
 	}
 }
 
-func shutdown(sig syscall.Signal) {
-	log.Printf("received %s, powering off", sig)
-	unix.Sync()
-	cmd := unix.LINUX_REBOOT_CMD_POWER_OFF
-	if sig == unix.SIGINT {
-		cmd = unix.LINUX_REBOOT_CMD_RESTART
+// shutdown stops the services, then every other process, unmounts the state
+// partition cleanly and powers off or restarts. Only the first call acts.
+func shutdown(cmd int, why string) {
+	lifecycle.Lock()
+	if shuttingDown {
+		lifecycle.Unlock()
+		return
 	}
+	shuttingDown = true
+	log.Printf("%s: stopping services", why)
+	stopServices()
+	lifecycle.Unlock()
+
+	// Container shims and anything else left: ask, wait, then insist.
+	_ = unix.Kill(-1, unix.SIGTERM)
+	time.Sleep(5 * time.Second)
+	_ = unix.Kill(-1, unix.SIGKILL)
+	time.Sleep(time.Second)
+	unix.Sync()
+	unmountState()
+	unix.Sync()
+	log.Printf("%s", map[int]string{unix.LINUX_REBOOT_CMD_RESTART: "restarting", unix.LINUX_REBOOT_CMD_POWER_OFF: "powering off"}[cmd])
 	_ = unix.Reboot(cmd)
+}
+
+// unmountState leaves the ext4 state partition clean: everything mounted below
+// /var goes first, then /var itself; if something still holds it, it is at
+// least made read-only so the journal is consistent.
+func unmountState() {
+	raw, _ := os.ReadFile("/proc/self/mounts")
+	var below []string
+	for _, line := range strings.Split(string(raw), "\n") {
+		f := strings.Fields(line)
+		// /opt/cni/bin is a bind mount of a directory on /var.
+		if len(f) > 1 && (strings.HasPrefix(f[1], "/var/") || f[1] == "/opt/cni/bin") {
+			below = append(below, f[1])
+		}
+	}
+	for i := len(below) - 1; i >= 0; i-- {
+		_ = unix.Unmount(below[i], unix.MNT_DETACH)
+	}
+	if err := unix.Unmount("/var", 0); err != nil {
+		_ = unix.Mount("", "/var", "", unix.MS_REMOUNT|unix.MS_RDONLY, "")
+	}
+}
+
+func uptime() string {
+	var info unix.Sysinfo_t
+	if unix.Sysinfo(&info) != nil {
+		return "?"
+	}
+	return (unixSeconds(info.Uptime)).String()
 }

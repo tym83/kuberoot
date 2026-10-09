@@ -1,0 +1,86 @@
+# The kuberoot builder: everything heavy happens here, in the cluster, not on a
+# laptop. One pod, one persistent disk for sources, caches and results:
+#   tools     Go, the kernel toolchain, kubectl; runs the build scripts
+#   alpine    assembles the root filesystem with apk
+#   registry  OCI registry for test builds of kubepkg packages
+#   files     serves /work/out over HTTP for VM disk imports and upgrades
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kuberoot-build
+  namespace: tenant-kuberoot
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: replicated
+  resources:
+    requests:
+      storage: 60Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: builder
+  namespace: tenant-kuberoot
+  labels:
+    app: kuberoot-builder
+spec:
+  terminationGracePeriodSeconds: 5
+  containers:
+  - name: tools
+    image: golang:1.26-bookworm
+    command: [sleep, infinity]
+    workingDir: /work
+    env:
+    - {name: GOPATH, value: /work/go}
+    - {name: GOCACHE, value: /work/gocache}
+    - {name: GOFLAGS, value: -mod=mod}
+    resources:
+      requests: {cpu: 200m, memory: 1Gi}
+      limits: {cpu: "8", memory: 16Gi}
+    volumeMounts:
+    - {name: work, mountPath: /work}
+  - name: alpine
+    image: alpine:3.22
+    command: [sleep, infinity]
+    resources:
+      requests: {cpu: 50m, memory: 256Mi}
+      limits: {cpu: "2", memory: 2Gi}
+    volumeMounts:
+    - {name: work, mountPath: /work}
+  - name: registry
+    image: registry:2
+    env:
+    - {name: REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY, value: /work/registry}
+    ports:
+    - containerPort: 5000
+    resources:
+      requests: {cpu: 50m, memory: 64Mi}
+      limits: {cpu: "1", memory: 512Mi}
+    volumeMounts:
+    - {name: work, mountPath: /work}
+  - name: files
+    image: busybox:stable
+    command: [sh, -c, "mkdir -p /work/out && exec httpd -f -p 8080 -h /work/out"]
+    ports:
+    - containerPort: 8080
+    resources:
+      requests: {cpu: 50m, memory: 32Mi}
+      limits: {cpu: 500m, memory: 128Mi}
+    volumeMounts:
+    - {name: work, mountPath: /work}
+  volumes:
+  - name: work
+    persistentVolumeClaim:
+      claimName: kuberoot-build
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: builder
+  namespace: tenant-kuberoot
+spec:
+  selector:
+    app: kuberoot-builder
+  ports:
+  - {name: files, port: 8080}
+  - {name: registry, port: 5000}

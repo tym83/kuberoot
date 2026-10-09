@@ -1,0 +1,35 @@
+# The node API checks cluster users' permissions with SubjectAccessReviews.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kuberoot:node-api:auth-delegator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: User
+  name: kuberoot:node-api
+---
+# Grant to whoever runs the machines: everything the node API offers.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kuberoot:node-admin
+rules:
+- apiGroups: [node.kuberoot.dev]
+  resources: ["*"]
+  verbs: ["*"]
+---
+# Read-only view of the nodes' operating system, folded into the built-in view role.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kuberoot:node-viewer
+  labels:
+    rbac.authorization.k8s.io/aggregate-to-view: "true"
+rules:
+- apiGroups: [node.kuberoot.dev]
+  resources: [osconfigs, nodeservices, disks, bootentries, upgrades, installations]
+  verbs: [get, list, watch]

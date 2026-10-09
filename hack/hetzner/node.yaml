@@ -1,0 +1,49 @@
+# A kuberoot node as a VM, like hardware: the boot media first, an empty
+# system disk second. The media is imported once from the builder; after the
+# install the node boots from its system disk.
+# Applied by hack/hetzner.sh node <name> <arch>.
+apiVersion: apps.cozystack.io/v1alpha1
+kind: VMDisk
+metadata:
+  name: NODE-media
+  namespace: tenant-kuberoot
+spec:
+  optical: false
+  source:
+    http:
+      url: http://builder.tenant-kuberoot.svc:8080/ARCH/media.img
+  storage: 1Gi
+  storageClass: replicated
+---
+apiVersion: apps.cozystack.io/v1alpha1
+kind: VMDisk
+metadata:
+  name: NODE-system
+  namespace: tenant-kuberoot
+spec:
+  optical: false
+  storage: 20Gi
+  storageClass: replicated
+---
+apiVersion: apps.cozystack.io/v1alpha1
+kind: VMInstance
+metadata:
+  name: NODE
+  namespace: tenant-kuberoot
+spec:
+  instanceType: ""
+  instanceProfile: linux.efi
+  runStrategy: Always
+  resources:
+    cpu: 4
+    sockets: 1
+    memory: 8Gi
+  external: true
+  externalMethod: PortList
+  externalAllowICMP: true
+  externalPorts:
+  - 50000
+  - 6443
+  disks:
+  - name: NODE-media
+  - name: NODE-system

@@ -1,0 +1,20 @@
+# A tenant Kubernetes for checking the kuberoot-platform packages, separate from
+# the shared kubepkg test cluster: the e2e script there removes every package
+# when it finishes. Two nodes: the host cluster is short of memory.
+apiVersion: apps.cozystack.io/v1alpha1
+kind: Kubernetes
+metadata:
+  name: platform
+  namespace: tenant-kuberoot
+spec:
+  version: v1.35
+  storageClass: replicated
+  controlPlane:
+    replicas: 2
+  nodeGroups:
+    md0:
+      instanceType: u1.large
+      diskSize: 60Gi
+      storageClass: replicated
+      minReplicas: 2
+      maxReplicas: 2
