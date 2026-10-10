@@ -35,6 +35,19 @@ type OSConfigStatus struct {
 	BootTime    metav1.Time `json:"bootTime,omitempty"`
 	MemoryTotal int64       `json:"memoryTotal,omitempty"`
 	MemoryFree  int64       `json:"memoryFree,omitempty"`
+	// GPUs the node's NVIDIA driver drives.
+	// +listType=atomic
+	GPUs []NodeGPU `json:"gpus,omitempty"`
+}
+
+// NodeGPU is a GPU of the node.
+type NodeGPU struct {
+	// Index is the GPU's device minor: /dev/nvidia<index>, and its name as a
+	// CDI device, nvidia.com/gpu=<index>.
+	Index int32  `json:"index"`
+	Model string `json:"model,omitempty"`
+	UUID  string `json:"uuid,omitempty"`
+	BusID string `json:"busID,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

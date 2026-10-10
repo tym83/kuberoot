@@ -58,6 +58,7 @@ spec:
         - --pod-cidr={{.Net.Pod}}
         - --pod-network={{.Net.PodNetwork}}
         - --model-servers
+        - --gpus
         - --service-cidr={{.Net.Service}}
       - name: containerd
         args: [/usr/bin/containerd, --config, /etc/containerd/config.toml]
@@ -211,6 +212,7 @@ spec:
         - --pod-cidr={{.Net.Pod}}
         - --pod-network={{.Net.PodNetwork}}
         - --model-servers
+        - --gpus
       - name: containerd
         args: [/usr/bin/containerd, --config, /etc/containerd/config.toml]
       - name: kubelet
