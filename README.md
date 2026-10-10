@@ -105,6 +105,12 @@ A new `spec.source` is a new version. It goes to one node first; once it is read
 
 Each node serves its part through the node API: `modelservers` (the models it serves, their phase and the weights they run) and `modelservers/log` (the server's output).
 
+### GPUs and packages
+
+The ai distribution is edge with pods and packages, so everything else for AI work comes as kubepkg packages: GPU sharing, queues, serving engines, training and vector databases, and ready-made combinations of them.
+
+The NVIDIA driver is part of the image, not a container that installs it. The open kernel modules are built against kuberoot's kernel and signed with its key, the only modules it loads. The CUDA driver library, NVML, nvidia-smi and the GSP firmware come from the same driver release. A node with NVIDIA GPUs loads the driver at boot. kuberoot-node creates the device files and describes the GPUs to containerd as CDI devices (`nvidia.com/gpu=0`, `=all`), for a device plugin to hand them to pods, and OSConfig lists them in `status.gpus`. A node without NVIDIA GPUs goes on without the driver. A Model can run on GPUs too: `spec.gpus` per replica places it only on nodes with as many free and runs it with a llama-server built for CUDA (Turing to Hopper), every layer on the GPUs. GPUs given to models are best kept from the device plugin's pods.
+
 ### The operator agent
 
 `kuberoot-agent` watches the cluster and asks a language model what to do about what it finds: nodes not ready, services of nodes restarting, model servers that fail, models short of replicas. The model is one the cluster serves, or any OpenAI-compatible endpoint. It never acts. It proposes a `Remedy`, one of five actions: restart a node's service, restart a model's server on a node, roll a model back to the version before, reboot a node, or escalate (change nothing and leave it to a person). The model picks only the action, held to the ones open for the problem by a JSON schema. What the action applies to comes from the problem, not from the model.
