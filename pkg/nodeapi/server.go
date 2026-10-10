@@ -80,8 +80,10 @@ type Options struct {
 	Machines            bool
 	VMNetworkKubeconfig string
 
-	// ModelServers: the node serves language models (modelservers resource).
-	ModelServers bool
+	// ModelServers: the node serves language models (modelservers resource),
+	// with all its memory but ModelReserveMiB for them.
+	ModelServers    bool
+	ModelReserveMiB int64
 
 	// LatencyTests: the node measures the latency it delivers to real-time
 	// tasks (latencytests resource).
@@ -145,7 +147,7 @@ func Run(ctx context.Context, o Options) error {
 	}
 	var models *modelHost
 	if o.ModelServers {
-		models = newModelHost()
+		models = newModelHost(o.ModelReserveMiB << 20)
 		storages["modelservers"] = modelServerStorage{models}
 	}
 	var latency *latencyTests

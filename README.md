@@ -105,6 +105,21 @@ A new `spec.source` is a new version. It goes to one node first; once it is read
 
 Each node serves its part through the node API: `modelservers` (the models it serves, their phase and the weights they run) and `modelservers/log` (the server's output).
 
+### The operator agent
+
+`kuberoot-agent` watches the cluster and asks a language model what to do about what it finds: nodes not ready, services of nodes restarting, model servers that fail, models short of replicas. The model is one the cluster serves, or any OpenAI-compatible endpoint. It never acts. It proposes a `Remedy`, one of five actions: restart a node's service, restart a model's server on a node, roll a model back to the version before, reboot a node, or escalate (change nothing and leave it to a person). The model picks only the action, held to the ones open for the problem by a JSON schema. What the action applies to comes from the problem, not from the model.
+
+```yaml
+apiVersion: ai.kuberoot.dev/v1alpha1
+kind: Agent
+metadata: {name: default}
+spec:
+  model: qwen
+  autoApprove: []      # actions that run without a person, e.g. [RestartModelServer]
+  maxPerHour: 4
+```
+
+A remedy runs once a person approves it (`kubectl patch remedy <name> --type merge -p '{"spec":{"approved":true}}'`), or at once if the Agent's `autoApprove` lists its action. `kuberoot-aictl` runs it, one a pass and no more than `maxPerHour`. It refuses, whoever approved it, to reboot the control plane or to reboot a node while another is down. The agent has an identity of its own: its role reads the cluster and creates remedies, and an admission policy keeps it from approving, changing or removing any. Remedies, with the agent's reason and the evidence it was shown, are the record of what it did and wanted to do.
 ## The rt distribution
 
 `rt` is a real-time controller: a control loop runs in a pod and wakes on time. The kernel is fully preemptible (PREEMPT_RT). CPUs 0 and 1 keep the node's own work, its interrupts and RCU callbacks; from CPU 2 on, CPUs run with no timer tick while one task runs on them. The kubelet hands whole CPUs out of those to Guaranteed pods that ask for whole CPUs, with their memory from the NUMA node of their CPUs, so the loop has its CPUs to itself:

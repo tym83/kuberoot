@@ -46,7 +46,7 @@ fetch "https://github.com/k3s-io/kine/releases/download/$KINE_VERSION/kine-$ARCH
 install -m 0755 "$CACHE/kine-$KINE_VERSION" $r/usr/bin/kine
 
 install -m 0755 "$OUT/kinit" $r/usr/sbin/kinit
-install -m 0755 "$OUT/kuberoot-node" "$OUT/kuberoot-installer" "$OUT/kuberoot-intents" "$OUT/kuberoot-router" "$OUT/kuberoot-vmctl" "$OUT/kuberoot-aictl" "$OUT/kubepkg" "$OUT/kubepkg-operator" $r/usr/bin/
+install -m 0755 "$OUT/kuberoot-node" "$OUT/kuberoot-installer" "$OUT/kuberoot-intents" "$OUT/kuberoot-router" "$OUT/kuberoot-vmctl" "$OUT/kuberoot-aictl" "$OUT/kuberoot-agent" "$OUT/kubepkg" "$OUT/kubepkg-operator" $r/usr/bin/
 mkdir -p $r/usr/share/kuberoot/kubepkg/crds
 cp "$OUT"/kubepkg-crds/*.yaml $r/usr/share/kuberoot/kubepkg/crds/
 cp -r "$OUT/glibc/." $r/
