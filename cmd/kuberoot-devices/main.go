@@ -8,9 +8,11 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -25,6 +27,7 @@ func main() {
 	kubeconfig := flag.String("kubeconfig", "", "credentials for the node's API server")
 	stateDir := flag.String("state-dir", "/var/lib/kuberoot/devices", "what survives a reboot: the confirmed configuration")
 	metricsAddr := flag.String("metrics-address", "", "where to serve the devices' values as Prometheus metrics, as :9790; none when empty")
+	advertise := flag.String("advertise-address", "", "the node's address, for the kube-system Service kuberoot-devices through which the cluster scrapes the metrics")
 	klog.InitFlags(nil)
 	flag.Parse()
 
@@ -49,6 +52,14 @@ func main() {
 			}
 		}()
 		defer srv.Close()
+		if *advertise != "" {
+			_, port, err := net.SplitHostPort(*metricsAddr)
+			n, perr := strconv.Atoi(port)
+			if err != nil || perr != nil {
+				klog.Fatalf("--metrics-address %q: no port", *metricsAddr)
+			}
+			go devices.Advertise(ctx, client, *advertise, n)
+		}
 	}
 	if err := c.Run(ctx); err != nil {
 		klog.Fatal(err)

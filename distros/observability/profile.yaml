@@ -182,6 +182,7 @@ spec:
         - /usr/bin/kuberoot-devices
         - --kubeconfig={{kube "admin.kubeconfig"}}
         - --metrics-address=:9790
+        - --advertise-address={{.Node.IP}}
 
     worker:
       generators: [node, member, containers, kubelet]
