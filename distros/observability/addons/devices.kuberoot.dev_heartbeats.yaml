@@ -1,0 +1,107 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: heartbeats.devices.kuberoot.dev
+spec:
+  group: devices.kuberoot.dev
+  names:
+    kind: Heartbeat
+    listKind: HeartbeatList
+    plural: heartbeats
+    singular: heartbeat
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.healthy
+      name: Healthy
+      type: boolean
+    - jsonPath: .status.sent
+      name: Sent
+      type: integer
+    - jsonPath: .status.lastSent
+      name: Last
+      type: date
+    - jsonPath: .status.error
+      name: Error
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          Heartbeat tells someone outside the node that it is alive and its own
+          checks work: every period it calls a URL, a dead man's switch that alerts
+          when the calls stop. With a query, it calls only while the query finds
+          what it looks for: a monitoring cluster that stopped collecting is as
+          silent as one that is down.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              every:
+                default: 1m
+                description: Every is the period of the beats.
+                type: string
+              query:
+                description: Query, when set, must return at least one series for
+                  a beat to go.
+                properties:
+                  expr:
+                    description: |-
+                      Expr: a beat goes while it returns a series, as
+                      max(time() - timestamp(up)) < 120.
+                    type: string
+                  url:
+                    description: URL of the API, as http://vmsingle.monitoring:8428.
+                    pattern: ^https?://
+                    type: string
+                required:
+                - expr
+                - url
+                type: object
+              url:
+                description: URL called with GET at every beat.
+                pattern: ^https?://
+                type: string
+            required:
+            - url
+            type: object
+          status:
+            properties:
+              error:
+                type: string
+              healthy:
+                description: 'Healthy: the last beat went.'
+                type: boolean
+              lastSent:
+                format: date-time
+                type: string
+              sent:
+                format: int64
+                type: integer
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
