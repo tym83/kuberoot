@@ -119,3 +119,14 @@ func TestRollback(t *testing.T) {
 		t.Fatalf("a slow version kept: %+v", st)
 	}
 }
+
+func TestPlaceSparesTheControlPlane(t *testing.T) {
+	nodes := []Node{{Name: "a", Ready: true, ControlPlane: true}, {Name: "b", Ready: true}, {Name: "c", Ready: true}}
+	got := Place(model(2, shaA, ""), nodes, map[string]int{"b": 3, "c": 3}, time.Now())
+	if got[0] != "b" || got[1] != "c" {
+		t.Fatalf("got %v: busy workers go before the control plane", got)
+	}
+	if got := Place(model(3, shaA, ""), nodes, nil, time.Now()); len(got) != 3 {
+		t.Fatalf("got %v: the control plane takes what the workers cannot", got)
+	}
+}

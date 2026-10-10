@@ -50,7 +50,7 @@ var generators = map[string]func(roleContext) error{
 			return err
 		}
 		files := map[string]string{}
-		for _, user := range []string{"admin", "controller-manager", "scheduler", "kube-proxy", "kubelet-client", "node-api-delegation", "intents"} {
+		for _, user := range []string{"admin", "controller-manager", "scheduler", "kube-proxy", "kubelet-client", "node-api-delegation", "intents", "agent"} {
 			kc, err := kubeconfig(apiServer, "ca.crt", "kuberoot", user)
 			if err != nil {
 				return err

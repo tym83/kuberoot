@@ -17,7 +17,7 @@ var GroupVersion = schema.GroupVersion{Group: "ai.kuberoot.dev", Version: "v1alp
 
 var (
 	SchemeBuilder = runtime.NewSchemeBuilder(func(s *runtime.Scheme) error {
-		s.AddKnownTypes(GroupVersion, &Model{}, &ModelList{})
+		s.AddKnownTypes(GroupVersion, &Model{}, &ModelList{}, &Remedy{}, &RemedyList{}, &Agent{}, &AgentList{})
 		metav1.AddToGroupVersion(s, GroupVersion)
 		return nil
 	})

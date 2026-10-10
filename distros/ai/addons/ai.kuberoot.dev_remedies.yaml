@@ -1,0 +1,127 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: remedies.ai.kuberoot.dev
+spec:
+  group: ai.kuberoot.dev
+  names:
+    kind: Remedy
+    listKind: RemedyList
+    plural: remedies
+    singular: remedy
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.action
+      name: Action
+      type: string
+    - jsonPath: .spec.node
+      name: Node
+      type: string
+    - jsonPath: .spec.target
+      name: Target
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .spec.reason
+      name: Reason
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          Remedy is one action the operator agent proposes: what to do, to what,
+          and why. The agent can only propose; the action runs once a person
+          approves it (spec.approved), or at once when the Agent's policy lets this
+          action run unattended. Remedies are the record of everything the agent
+          did and wanted to do.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              action:
+                enum:
+                - RestartService
+                - RestartModelServer
+                - RollbackModel
+                - RebootNode
+                - Escalate
+                type: string
+              approved:
+                default: false
+                description: 'Approved runs the action. Only a person sets it: the
+                  agent may not.'
+                type: boolean
+              evidence:
+                description: 'Evidence the agent saw: the findings it was shown.'
+                items:
+                  type: string
+                type: array
+              node:
+                description: Node the action is on, for the actions on a node.
+                type: string
+              reason:
+                description: Reason is the agent's account of the problem and of the
+                  choice.
+                maxLength: 2000
+                type: string
+              target:
+                description: |-
+                  Target: the service of RestartService, the model of
+                  RestartModelServer and RollbackModel.
+                type: string
+            required:
+            - action
+            - approved
+            - reason
+            type: object
+            x-kubernetes-validations:
+            - message: a remedy changes only by being approved
+              rule: self == oldSelf || (oldSelf.approved == false && self.approved
+                == true && self.action == oldSelf.action && self.node == oldSelf.node
+                && self.target == oldSelf.target)
+          status:
+            properties:
+              approvedBy:
+                description: 'ApprovedBy: "person", or "policy" when the Agent''s
+                  policy ran it.'
+                type: string
+              doneAt:
+                format: date-time
+                type: string
+              message:
+                type: string
+              phase:
+                description: 'Phase: Proposed, Running, Done, Failed, Refused or Expired.'
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

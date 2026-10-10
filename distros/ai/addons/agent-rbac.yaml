@@ -1,0 +1,94 @@
+# The operator agent reads the cluster and proposes remedies; it changes
+# nothing else. kuberoot-aictl runs the remedies a person or the policy
+# approved, with its own credentials.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kuberoot:agent
+rules:
+- apiGroups: [""]
+  resources: [nodes]
+  verbs: [get, list, watch]
+- apiGroups: [ai.kuberoot.dev]
+  resources: [models, agents, remedies]
+  verbs: [get, list, watch]
+- apiGroups: [ai.kuberoot.dev]
+  resources: [remedies]
+  verbs: [create]
+- apiGroups: [ai.kuberoot.dev]
+  resources: [agents/status]
+  verbs: [get, update, patch]
+- apiGroups: [node.kuberoot.dev]
+  resources: [nodeservices, nodeservices/log, modelservers, modelservers/log, osconfigs]
+  verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kuberoot:agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kuberoot:agent
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: User
+  name: kuberoot:agent
+---
+# The key of an external model's API, when the Agent names one.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kuberoot:agent
+  namespace: kube-system
+rules:
+- apiGroups: [""]
+  resources: [secrets]
+  resourceNames: [kuberoot-agent]
+  verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kuberoot:agent
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kuberoot:agent
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: User
+  name: kuberoot:agent
+---
+# Whatever its role grows into, the agent only ever proposes: it creates
+# remedies that are not approved, and changes none.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: kuberoot-agent-proposes-only
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups: [ai.kuberoot.dev]
+      apiVersions: ["*"]
+      operations: [CREATE, UPDATE, DELETE]
+      resources: [remedies, remedies/status, agents]
+  matchConditions:
+  - name: by-the-agent
+    expression: request.userInfo.username == "kuberoot:agent"
+  validations:
+  - expression: >-
+      request.operation == "CREATE" && request.resource.resource == "remedies" &&
+      (!has(request.subResource) || request.subResource == "") &&
+      !(has(object.spec.approved) && object.spec.approved)
+    message: the agent proposes remedies; it does not approve, change or remove them
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: kuberoot-agent-proposes-only
+spec:
+  policyName: kuberoot-agent-proposes-only
+  validationActions: [Deny]

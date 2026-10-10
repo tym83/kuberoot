@@ -19,6 +19,9 @@ type Node struct {
 	Name, Address string
 	Ready         bool
 	DownSince     time.Time
+	// ControlPlane: the node runs the cluster's API; models go there only
+	// when no other node can take them.
+	ControlPlane bool
 }
 
 // Server is a model server as a node reports it.
@@ -58,6 +61,9 @@ func Place(m v1.Model, nodes []Node, load map[string]int, now time.Time) []strin
 		}
 	}
 	sort.Slice(free, func(i, j int) bool {
+		if free[i].ControlPlane != free[j].ControlPlane {
+			return !free[i].ControlPlane
+		}
 		if load[free[i].Name] != load[free[j].Name] {
 			return load[free[i].Name] < load[free[j].Name]
 		}

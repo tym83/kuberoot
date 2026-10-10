@@ -92,6 +92,18 @@ func (c *Controller) nodes(ctx context.Context) ([]Node, error) {
 		}
 		out = append(out, node)
 	}
+	// The control plane is where the cluster's API server runs.
+	if services, err := c.Dynamic.Resource(servicesGVR).List(ctx, metav1.ListOptions{}); err == nil {
+		cp := map[string]bool{}
+		for _, u := range services.Items {
+			if node, svc, ok := strings.Cut(u.GetName(), "."); ok && svc == "kube-apiserver" {
+				cp[node] = true
+			}
+		}
+		for i := range out {
+			out[i].ControlPlane = cp[out[i].Name]
+		}
+	}
 	return out, nil
 }
 
@@ -228,6 +240,7 @@ func (c *Controller) reconcile(ctx context.Context) {
 	if c.Gateway != nil {
 		c.Gateway.SetRoutes(routes)
 	}
+	c.remedies(ctx, nodes)
 }
 
 // probeResult tries a new version on its first node once it is ready
