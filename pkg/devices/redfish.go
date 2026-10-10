@@ -154,36 +154,41 @@ func (d *redfishDevice) chassis(path string, r Reading) {
 		var t struct {
 			Temperatures []struct {
 				Name           string   `json:"Name"`
+				MemberID       string   `json:"MemberId"`
 				ReadingCelsius *float64 `json:"ReadingCelsius"`
 			} `json:"Temperatures"`
 			Fans []struct {
 				Name         string   `json:"Name"`
 				FanName      string   `json:"FanName"`
+				MemberID     string   `json:"MemberId"`
 				Reading      *float64 `json:"Reading"`
 				ReadingUnits string   `json:"ReadingUnits"`
 				Status       rfStatus `json:"Status"`
 			} `json:"Fans"`
 		}
 		if d.get(c.Thermal.ID, &t) == nil {
-			for _, s := range t.Temperatures {
+			temps := sensorNames{}
+			for i, s := range t.Temperatures {
 				if s.ReadingCelsius != nil {
-					r["temperature_"+name(s.Name)+"_celsius"] = *s.ReadingCelsius
+					r["temperature_"+temps.of(s.Name, s.MemberID, i)+"_celsius"] = *s.ReadingCelsius
 				}
 			}
-			for _, f := range t.Fans {
+			fans := sensorNames{}
+			for i, f := range t.Fans {
 				n := f.Name
 				if n == "" {
 					n = f.FanName
 				}
+				n = fans.of(n, f.MemberID, i)
 				if f.Reading != nil {
 					unit := "rpm"
 					if strings.EqualFold(f.ReadingUnits, "Percent") {
 						unit = "percent"
 					}
-					r["fan_"+name(n)+"_"+unit] = *f.Reading
+					r["fan_"+n+"_"+unit] = *f.Reading
 				}
 				if h, ok := healthValue[f.Status.Health]; ok {
-					r["fan_"+name(n)+"_health"] = h
+					r["fan_"+n+"_health"] = h
 				}
 			}
 		}
@@ -192,26 +197,47 @@ func (d *redfishDevice) chassis(path string, r Reading) {
 		var p struct {
 			PowerControl []struct {
 				Name               string   `json:"Name"`
+				MemberID           string   `json:"MemberId"`
 				PowerConsumedWatts *float64 `json:"PowerConsumedWatts"`
 			} `json:"PowerControl"`
 			PowerSupplies []struct {
-				Name   string   `json:"Name"`
-				Status rfStatus `json:"Status"`
+				Name     string   `json:"Name"`
+				MemberID string   `json:"MemberId"`
+				Status   rfStatus `json:"Status"`
 			} `json:"PowerSupplies"`
 		}
 		if d.get(c.Power.ID, &p) == nil {
-			for _, pc := range p.PowerControl {
+			controls := sensorNames{}
+			for i, pc := range p.PowerControl {
 				if pc.PowerConsumedWatts != nil {
-					r["power_"+name(pc.Name)+"_watts"] = *pc.PowerConsumedWatts
+					r["power_"+controls.of(pc.Name, pc.MemberID, i)+"_watts"] = *pc.PowerConsumedWatts
 				}
 			}
-			for _, ps := range p.PowerSupplies {
+			psus := sensorNames{}
+			for i, ps := range p.PowerSupplies {
 				if h, ok := healthValue[ps.Status.Health]; ok {
-					r["psu_"+name(ps.Name)+"_health"] = h
+					r["psu_"+psus.of(ps.Name, ps.MemberID, i)+"_health"] = h
 				}
 			}
 		}
 	}
+}
+
+// sensorNames names the sensors of one list: by what the BMC calls them,
+// and, for two of the same name, by their member id or place as well.
+type sensorNames map[string]bool
+
+func (s sensorNames) of(n, member string, i int) string {
+	base := name(n)
+	if !s[base] {
+		s[base] = true
+		return base
+	}
+	id := member
+	if id == "" {
+		id = fmt.Sprint(i)
+	}
+	return base + "_" + name(id)
 }
 
 // logs counts the entries of a system's or a manager's log services.

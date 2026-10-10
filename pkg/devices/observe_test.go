@@ -31,7 +31,8 @@ func bmc(t *testing.T, user, pass string) *httptest.Server {
 		"/redfish/v1/Chassis/1U/Thermal": `{"Temperatures":[{"Name":"CPU1 Temp","ReadingCelsius":41.5},{"Name":"Inlet","ReadingCelsius":null}],
 			"Fans":[{"Name":"BaseBoard System Fan","Reading":2100,"ReadingUnits":"RPM","Status":{"Health":"OK"}}]}`,
 		"/redfish/v1/Chassis/1U/Power": `{"PowerControl":[{"Name":"System Power Control","PowerConsumedWatts":344}],
-			"PowerSupplies":[{"Name":"Power Supply Bay 1","Status":{"Health":"Critical"}}]}`,
+			"PowerSupplies":[{"Name":"Power Supply Bay","MemberId":"0","Status":{"Health":"OK"}},
+			                 {"Name":"Power Supply Bay","MemberId":"1","Status":{"Health":"Critical"}}]}`,
 		"/redfish/v1/Managers":     `{"Members":[{"@odata.id":"/redfish/v1/Managers/BMC"}]}`,
 		"/redfish/v1/Managers/BMC": `{"Status":{"Health":"OK"}}`,
 	}
@@ -63,7 +64,9 @@ func TestRedfish(t *testing.T) {
 	want := Reading{
 		"system_1_health": 1, "system_1_powered_on": 1, "system_1_log_sel_entries": 17,
 		"temperature_cpu1_temp_celsius": 41.5, "fan_baseboard_system_fan_rpm": 2100, "fan_baseboard_system_fan_health": 0,
-		"power_system_power_control_watts": 344, "psu_power_supply_bay_1_health": 2,
+		"power_system_power_control_watts": 344,
+		// Two power supplies of one name: the second by its member id.
+		"psu_power_supply_bay_health": 0, "psu_power_supply_bay_1_health": 2,
 	}
 	for k, v := range want {
 		if r[k] != v {
