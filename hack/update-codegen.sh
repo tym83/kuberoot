@@ -24,6 +24,12 @@ go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.22.0 object:headerFile
 go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.22.0 object:headerFile=$HEADER \
   paths=./pkg/apis/vm/... crd:crdVersions=v1 output:crd:dir=distros/hypervisor/addons
 
+# The workstation distribution runs machines too, and workspaces in them.
+go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.22.0 \
+  paths=./pkg/apis/vm/... crd:crdVersions=v1 output:crd:dir=distros/workstation/addons
+go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.22.0 object:headerFile=$HEADER \
+  paths=./pkg/apis/workstation/... crd:crdVersions=v1 output:crd:dir=distros/workstation/addons
+
 # The devices API: deepcopy, and its CRDs as the iot distribution's add-ons.
 go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.22.0 object:headerFile=$HEADER \
   paths=./pkg/apis/devices/... crd:crdVersions=v1 output:crd:dir=distros/iot/addons
