@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -234,4 +235,20 @@ func writeFiles(files map[string]string, dirs ...string) error {
 		}
 	}
 	return nil
+}
+
+// kubeletAssignments are the CPU and memory managers' records of what they
+// gave each container.
+var kubeletAssignments = []string{"/var/lib/kubelet/cpu_manager_state", "/var/lib/kubelet/memory_manager_state"}
+
+// forgetResourceAssignments drops those records at boot. No container runs
+// yet, so they describe nothing, and the static managers refuse to start
+// when the machine they recorded differs from the one booting: a new kernel
+// leaves a few pages more or less of memory.
+func forgetResourceAssignments() {
+	for _, f := range kubeletAssignments {
+		if err := os.Remove(f); err != nil && !os.IsNotExist(err) {
+			log.Printf("kubelet assignments: %v", err)
+		}
+	}
 }
