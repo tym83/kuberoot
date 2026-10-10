@@ -84,7 +84,7 @@ Each node serves its part through the node API: `volumes` (the disks on it, with
 
 ## The ai distribution
 
-`ai` serves language models with no pods and no container images: each node runs llama-server, built into the image as one static binary for the CPU, as a process of its own. A model is a resource of the cluster:
+`ai` is a cluster for inference and training: edge, pods and packages included, with a way of its own to serve language models that needs no pods and no container images. Each node runs llama-server, built into the image, as a process of its own. A model is a resource of the cluster:
 
 ```yaml
 apiVersion: ai.kuberoot.dev/v1alpha1
