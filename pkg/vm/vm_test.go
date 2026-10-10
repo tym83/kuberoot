@@ -88,3 +88,14 @@ func TestStatusReceiveFailed(t *testing.T) {
 		t.Fatalf("an ordinary start reported %+v", st)
 	}
 }
+
+func TestArgsSystemSerial(t *testing.T) {
+	m := &Machines{}
+	args := strings.Join(m.Args("desk", node.MachineSpec{CPUs: 1, MemoryMiB: 512, SystemSerial: "ds=nocloud;s=http://g/desk/"}, nil), " ")
+	if !strings.Contains(args, "--platform system_serial_number=ds=nocloud;s=http://g/desk/") {
+		t.Fatalf("args: %s", args)
+	}
+	if strings.Contains(strings.Join(m.Args("plain", node.MachineSpec{CPUs: 1, MemoryMiB: 512}, nil), " "), "--platform") {
+		t.Fatal("a platform serial for a machine with none")
+	}
+}

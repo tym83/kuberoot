@@ -59,6 +59,9 @@ func (c *Controller) Run(ctx context.Context) error {
 	}
 	c.dhcp = &router.Daemon{Name: "dnsmasq", Args: []string{"/usr/sbin/dnsmasq", "--conf-file=" + filepath.Join(c.StateDir, "dnsmasq.conf")}}
 	defer c.dhcp.Stop()
+	if c.Network.IsValid() {
+		go c.serveSeeds(ctx, c.Network.Masked().Addr().Next().String())
+	}
 	for {
 		if err := c.gateway(); err != nil {
 			klog.Errorf("gateway: %v", err)
@@ -547,7 +550,8 @@ func machineSpec(m *v1.VirtualMachine, p Plan, running bool) nodev1.MachineSpec 
 	if cpus == 0 {
 		cpus = 1
 	}
-	return nodev1.MachineSpec{CPUs: cpus, MemoryMiB: mem, Volumes: []string{m.Name}, MAC: p.MAC, Running: running}
+	return nodev1.MachineSpec{CPUs: cpus, MemoryMiB: mem, Volumes: []string{m.Name}, MAC: p.MAC, Running: running,
+		SystemSerial: systemSerial(m)}
 }
 
 // bothPrimary: the disk is still writable on two nodes, after a live move or

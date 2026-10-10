@@ -86,3 +86,17 @@ func TestPlanMovesOnlyToACurrentCopy(t *testing.T) {
 		t.Errorf("moved without a current copy: %+v", p)
 	}
 }
+
+func TestSystemSerialPointsToTheSeed(t *testing.T) {
+	m := &v1.VirtualMachine{}
+	m.Name = "desk"
+	if got := systemSerial(m); got != "" {
+		t.Fatalf("a machine without user data got %q", got)
+	}
+	seedBase.Store("http://10.123.0.1:8091")
+	defer seedBase.Store("")
+	m.Spec.UserData = "#cloud-config\n"
+	if got := systemSerial(m); got != "ds=nocloud;s=http://10.123.0.1:8091/desk/" {
+		t.Fatalf("got %q", got)
+	}
+}
