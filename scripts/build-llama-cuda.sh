@@ -38,8 +38,18 @@ if [ ! -x "$cuda/bin/nvcc" ]; then
   manifest=$(curl -fsSL "$base/redistrib_$CUDA_REDIST_VERSION.json")
   mkdir -p "$cuda.part"
   for c in cuda_nvcc cuda_cudart cuda_cccl libcublas cuda_nvrtc; do
-    path=$(printf '%s' "$manifest" | python3 -c "import json,sys; print(json.load(sys.stdin)['$c']['$platform']['relative_path'])")
-    curl -fsSL "$base/$path" | tar -xJ -C "$cuda.part" --strip-components=1
+    read -r path sha < <(printf '%s' "$manifest" | python3 -c "import json,sys; e=json.load(sys.stdin)['$c']['$platform']; print(e['relative_path'], e['sha256'])")
+    archive="$WORK/cache/$(basename "$path")"
+    # Large archives: resumed when the connection drops, used only whole;
+    # one that is whole and still wrong is fetched anew.
+    for try in 1 2 3 4 5 6; do
+      echo "$sha  $archive" | sha256sum -c --quiet 2>/dev/null && break
+      if curl -fsSL --retry 3 -C - -o "$archive" "$base/$path"; then
+        echo "$sha  $archive" | sha256sum -c --quiet 2>/dev/null || : > "$archive"
+      fi
+    done
+    echo "$sha  $archive" | sha256sum -c --quiet
+    tar -xJf "$archive" -C "$cuda.part" --strip-components=1
   done
   rm -rf "$cuda"
   mv "$cuda.part" "$cuda"

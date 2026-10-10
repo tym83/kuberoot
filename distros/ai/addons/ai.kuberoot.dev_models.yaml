@@ -60,6 +60,14 @@ spec:
                   serves at once.
                 format: int32
                 type: integer
+              gpus:
+                description: |-
+                  GPUs each replica runs on: NVIDIA GPUs of its node, which then holds
+                  all of the model; none runs it on the CPUs. Replicas go only to nodes
+                  with as many GPUs free.
+                format: int32
+                minimum: 0
+                type: integer
               parallel:
                 default: 1
                 format: int32
