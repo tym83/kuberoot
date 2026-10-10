@@ -99,7 +99,7 @@ func TestStatusTellsAServerThatDied(t *testing.T) {
 	if err := os.MkdirAll(RunDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(s.pidFile("m")+".config", []byte(configKey(spec)), 0o600); err != nil {
+	if err := os.WriteFile(s.pidFile("m")+".config", []byte(configKey(spec, nil)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if st := s.Status("m", spec); st.Phase != "Failed" {
@@ -108,5 +108,46 @@ func TestStatusTellsAServerThatDied(t *testing.T) {
 	spec.SHA256 = sum("v2")
 	if st := s.Status("m", spec); st.Phase != "Starting" {
 		t.Fatalf("other weights asked for: %+v", st)
+	}
+}
+
+func TestAssignGPUs(t *testing.T) {
+	dirs(t)
+	orig := GPUsPresent
+	GPUsPresent = func() []int32 { return []int32{0, 1, 2} }
+	defer func() { GPUsPresent = orig }()
+	s := &Servers{}
+	save := func(name string, n int32) node.ModelServerSpec {
+		spec := node.ModelServerSpec{URL: "u", SHA256: sum(name), Model: name, Port: 8100, GPUs: n}
+		if err := s.Save(name, spec); err != nil {
+			t.Fatal(err)
+		}
+		return spec
+	}
+	a := save("a", 2)
+	got, err := s.assignGPUs("a", a)
+	if err != nil || joinInts(got) != "0,1" {
+		t.Fatalf("a: %v %v", got, err)
+	}
+	b := save("b", 2)
+	if _, err := s.assignGPUs("b", b); err == nil || !strings.Contains(err.Error(), "1 free") {
+		t.Fatalf("b got GPUs a holds: %v", err)
+	}
+	b = save("b", 1)
+	if got, err := s.assignGPUs("b", b); err != nil || joinInts(got) != "2" {
+		t.Fatalf("b: %v %v", got, err)
+	}
+	// Asked again, a keeps what it has.
+	if got, _ := s.assignGPUs("a", a); joinInts(got) != "0,1" {
+		t.Fatalf("a moved: %v", got)
+	}
+	if !strings.Contains(configKey(a, []int32{0, 1}), CUDABinary) || !strings.Contains(strings.Join(Args(a), " "), "--n-gpu-layers 999") {
+		t.Fatal("a GPU server does not run on its GPUs")
+	}
+	if err := s.Delete("a"); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.GPUsOf("a"); got != nil {
+		t.Fatalf("GPUs kept after delete: %v", got)
 	}
 }

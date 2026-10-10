@@ -1768,6 +1768,13 @@ func schema_pkg_apis_node_v1alpha1_ModelServerSpec(ref common.ReferenceCallback)
 							Format:      "int32",
 						},
 					},
+					"gpus": {
+						SchemaProps: spec.SchemaProps{
+							Description: "GPUs: NVIDIA GPUs of the node the server runs the model on, all of its layers; none runs it on the CPUs.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 				},
 				Required: []string{"url", "sha256", "model", "port"},
 			},
@@ -1805,6 +1812,25 @@ func schema_pkg_apis_node_v1alpha1_ModelServerStatus(ref common.ReferenceCallbac
 							Description: "SHA256 of the weights the running server has loaded.",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+					"gpuIndexes": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "GPUIndexes are the GPUs the server was given.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"integer"},
+										Format: "int32",
+									},
+								},
+							},
 						},
 					},
 					"downloaded": {

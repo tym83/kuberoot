@@ -22,6 +22,8 @@ type Node struct {
 	// ControlPlane: the node runs the cluster's API; models go there only
 	// when no other node can take them.
 	ControlPlane bool
+	// GPUs the node has.
+	GPUs int
 }
 
 // Server is a model server as a node reports it.
@@ -42,7 +44,10 @@ var (
 
 // Place picks the model's nodes: those it has, unless they are gone or
 // down for long, and the least loaded ready nodes for the rest.
-func Place(m v1.Model, nodes []Node, load map[string]int, now time.Time) []string {
+//
+// A model on GPUs goes only to nodes with as many free: gpusUsed counts, by
+// node, the GPUs of other models' replicas.
+func Place(m v1.Model, nodes []Node, load map[string]int, gpusUsed map[string]int, now time.Time) []string {
 	byName := map[string]Node{}
 	for _, n := range nodes {
 		byName[n.Name] = n
@@ -56,7 +61,8 @@ func Place(m v1.Model, nodes []Node, load map[string]int, now time.Time) []strin
 	}
 	var free []Node
 	for _, n := range nodes {
-		if n.Ready && !slices.Contains(out, n.Name) {
+		fits := m.Spec.GPUs == 0 || n.GPUs-gpusUsed[n.Name] >= int(m.Spec.GPUs)
+		if n.Ready && fits && !slices.Contains(out, n.Name) {
 			free = append(free, n)
 		}
 	}

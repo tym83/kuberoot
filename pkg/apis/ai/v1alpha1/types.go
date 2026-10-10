@@ -58,6 +58,12 @@ type ModelSpec struct {
 	// Threads for generation on each replica; all the node's CPUs when 0.
 	// +optional
 	Threads int32 `json:"threads,omitempty"`
+	// GPUs each replica runs on: NVIDIA GPUs of its node, which then holds
+	// all of the model; none runs it on the CPUs. Replicas go only to nodes
+	// with as many GPUs free.
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	GPUs int32 `json:"gpus,omitempty"`
 }
 
 // Source is a version of a model: a GGUF file and its SHA-256.

@@ -104,6 +104,17 @@ func (c *Controller) nodes(ctx context.Context) ([]Node, error) {
 			out[i].ControlPlane = cp[out[i].Name]
 		}
 	}
+	// The GPUs each node has, as its OS reports them.
+	if configs, err := c.Dynamic.Resource(osconfigsGVR).List(ctx, metav1.ListOptions{}); err == nil {
+		gpus := map[string]int{}
+		for _, u := range configs.Items {
+			list, _, _ := unstructured.NestedSlice(u.Object, "status", "gpus")
+			gpus[u.GetName()] = len(list)
+		}
+		for i := range out {
+			out[i].GPUs = gpus[out[i].Name]
+		}
+	}
 	return out, nil
 }
 
@@ -152,7 +163,7 @@ func (c *Controller) reconcile(ctx context.Context) {
 		return
 	}
 	var models []v1.Model
-	usedPorts, load := map[int32]bool{}, map[string]int{}
+	usedPorts, load, gpusUsed := map[int32]bool{}, map[string]int{}, map[string]int{}
 	for _, u := range list.Items {
 		var m v1.Model
 		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &m); err != nil {
@@ -164,6 +175,7 @@ func (c *Controller) reconcile(ctx context.Context) {
 		}
 		for _, r := range m.Status.Replicas {
 			load[r.Node]++
+			gpusUsed[r.Node] += int(m.Spec.GPUs)
 		}
 	}
 	sort.Slice(models, func(i, j int) bool { return models[i].CreationTimestamp.Before(&models[j].CreationTimestamp) })
@@ -192,9 +204,14 @@ func (c *Controller) reconcile(ctx context.Context) {
 				}
 			}
 		}
-		replicas := Place(*m, nodes, load, time.Now())
+		// Its own replicas' GPUs are its to keep.
+		for _, r := range m.Status.Replicas {
+			gpusUsed[r.Node] -= int(m.Spec.GPUs)
+		}
+		replicas := Place(*m, nodes, load, gpusUsed, time.Now())
 		for _, r := range replicas {
 			load[r]++
+			gpusUsed[r] += int(m.Spec.GPUs)
 		}
 		mine := servers[m.Name]
 		want, st := Rollout(*m, replicas, mine, c.probeResult(ctx, m, mine, byName, port), time.Now())
@@ -345,7 +362,7 @@ func (c *Controller) apply(ctx context.Context, m *v1.Model, want map[string]str
 			continue
 		}
 		spec := nodev1.ModelServerSpec{URL: urls[sha], SHA256: sha, Model: m.Name, Port: port,
-			ContextSize: m.Spec.ContextSize, Parallel: m.Spec.Parallel, Threads: m.Spec.Threads}
+			ContextSize: m.Spec.ContextSize, Parallel: m.Spec.Parallel, Threads: m.Spec.Threads, GPUs: m.Spec.GPUs}
 		if err := c.ensure(ctx, node+"."+m.Name, spec); err != nil {
 			klog.Errorf("%s on %s: %v", m.Name, node, err)
 		}

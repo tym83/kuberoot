@@ -524,6 +524,9 @@ type ModelServerSpec struct {
 	Parallel    int32 `json:"parallel,omitempty"`
 	// Threads for generation; all the node's CPUs when 0.
 	Threads int32 `json:"threads,omitempty"`
+	// GPUs: NVIDIA GPUs of the node the server runs the model on, all of its
+	// layers; none runs it on the CPUs.
+	GPUs int32 `json:"gpus,omitempty"`
 }
 
 type ModelServerStatus struct {
@@ -533,6 +536,9 @@ type ModelServerStatus struct {
 	PID     int32  `json:"pid,omitempty"`
 	// SHA256 of the weights the running server has loaded.
 	SHA256 string `json:"sha256,omitempty"`
+	// GPUIndexes are the GPUs the server was given.
+	// +listType=atomic
+	GPUIndexes []int32 `json:"gpuIndexes,omitempty"`
 	// Downloaded bytes of the weights, while they download.
 	Downloaded int64        `json:"downloaded,omitempty"`
 	StartedAt  *metav1.Time `json:"startedAt,omitempty"`

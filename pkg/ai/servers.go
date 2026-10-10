@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/tym83/kuberoot/pkg/apis/node"
 	"github.com/tym83/kuberoot/pkg/atomicfile"
+	"github.com/tym83/kuberoot/pkg/gpu"
 )
 
 var (
@@ -35,6 +37,8 @@ var (
 	RunDir   = "/run/kuberoot/models"
 	LogDir   = "/var/log/kuberoot/models"
 	Binary   = "/usr/bin/llama-server"
+	// CUDABinary serves models on NVIDIA GPUs.
+	CUDABinary = "/usr/bin/llama-server-cuda"
 	// CgroupDir holds the servers' memory: all of the node's but Reserve,
 	// so that a server asking for more is stopped, and not the node.
 	CgroupDir = "/sys/fs/cgroup/kuberoot-models"
@@ -112,10 +116,102 @@ func Args(spec node.ModelServerSpec) []string {
 	if spec.Threads > 0 {
 		args = append(args, "--threads", strconv.Itoa(int(spec.Threads)))
 	}
+	if spec.GPUs > 0 {
+		args = append(args, "--n-gpu-layers", "999")
+	}
 	return args
 }
 
-func configKey(spec node.ModelServerSpec) string { return strings.Join(Args(spec), " ") }
+// binary serves the spec: on its GPUs, or on the CPUs.
+func binary(spec node.ModelServerSpec) string {
+	if spec.GPUs > 0 {
+		return CUDABinary
+	}
+	return Binary
+}
+
+func configKey(spec node.ModelServerSpec, gpus []int32) string {
+	key := binary(spec) + " " + strings.Join(Args(spec), " ")
+	if len(gpus) > 0 {
+		key += " gpus=" + joinInts(gpus)
+	}
+	return key
+}
+
+func joinInts(v []int32) string {
+	parts := make([]string, len(v))
+	for i, n := range v {
+		parts[i] = strconv.Itoa(int(n))
+	}
+	return strings.Join(parts, ",")
+}
+
+// GPUsOf are the GPUs a server was given.
+func (s *Servers) GPUsOf(name string) []int32 {
+	raw, err := os.ReadFile(s.specFile(name) + ".gpus")
+	if err != nil || len(strings.TrimSpace(string(raw))) == 0 {
+		return nil
+	}
+	var out []int32
+	for _, f := range strings.Split(strings.TrimSpace(string(raw)), ",") {
+		if n, err := strconv.Atoi(f); err == nil {
+			out = append(out, int32(n))
+		}
+	}
+	return out
+}
+
+// GPUsPresent lists the node's GPUs by index; a variable for tests.
+var GPUsPresent = func() []int32 {
+	gpus, _ := gpu.Find()
+	out := make([]int32, 0, len(gpus))
+	for _, g := range gpus {
+		out = append(out, int32(g.Minor))
+	}
+	return out
+}
+
+// assignGPUs gives a server as many GPUs as its spec asks for: those it
+// has, if they still are enough, else free ones no other server holds.
+func (s *Servers) assignGPUs(name string, spec node.ModelServerSpec) ([]int32, error) {
+	file := s.specFile(name) + ".gpus"
+	if spec.GPUs == 0 {
+		_ = os.Remove(file)
+		return nil, nil
+	}
+	present := map[int32]bool{}
+	for _, g := range GPUsPresent() {
+		present[g] = true
+	}
+	held := map[int32]bool{}
+	for _, other := range s.Names() {
+		if other == name {
+			continue
+		}
+		for _, g := range s.GPUsOf(other) {
+			held[g] = true
+		}
+	}
+	var mine []int32
+	for _, g := range s.GPUsOf(name) {
+		if present[g] && !held[g] && len(mine) < int(spec.GPUs) {
+			mine = append(mine, g)
+		}
+	}
+	for _, g := range GPUsPresent() {
+		if len(mine) >= int(spec.GPUs) {
+			break
+		}
+		if !held[g] && !slices.Contains(mine, g) {
+			mine = append(mine, g)
+		}
+	}
+	if len(mine) < int(spec.GPUs) {
+		return nil, fmt.Errorf("%d GPUs asked for, %d free", spec.GPUs, len(mine))
+	}
+	slices.Sort(mine)
+	return mine, os.WriteFile(file, []byte(joinInts(mine)), 0o600)
+}
 
 // Apply downloads the weights the server needs, and runs the server with
 // them; a server running with other weights or settings is restarted.
@@ -123,9 +219,13 @@ func (s *Servers) Apply(ctx context.Context, name string, spec node.ModelServerS
 	if err := s.fetch(ctx, spec.URL, spec.SHA256); err != nil {
 		return err
 	}
+	gpus, err := s.assignGPUs(name, spec)
+	if err != nil {
+		return err
+	}
 	pid := s.pid(name)
 	if pid != 0 {
-		if s.startedWith(name) == configKey(spec) {
+		if s.startedWith(name) == configKey(spec, gpus) {
 			if ok, _ := healthy(spec.Port); ok {
 				// Proven: no longer the first one the kernel stops.
 				_ = os.WriteFile(fmt.Sprintf("/proc/%d/oom_score_adj", pid), []byte("0"), 0o644)
@@ -135,13 +235,13 @@ func (s *Servers) Apply(ctx context.Context, name string, spec node.ModelServerS
 		if err := s.stop(name, pid); err != nil {
 			return err
 		}
-	} else if s.startedWith(name) == configKey(spec) {
+	} else if s.startedWith(name) == configKey(spec, gpus) {
 		// It ran with these settings and exited: not again at once.
 		if info, err := os.Stat(s.pidFile(name) + ".config"); err == nil && time.Since(info.ModTime()) < RestartDelay {
 			return nil
 		}
 	}
-	return s.start(name, spec)
+	return s.start(name, spec, gpus)
 }
 
 // cgroup is the server's own group under the servers' limit; the whole
@@ -183,7 +283,7 @@ func memTotal() int64 {
 	return 0
 }
 
-func (s *Servers) start(name string, spec node.ModelServerSpec) error {
+func (s *Servers) start(name string, spec node.ModelServerSpec, gpus []int32) error {
 	for _, d := range []string{RunDir, LogDir} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			return err
@@ -199,8 +299,12 @@ func (s *Servers) start(name string, spec node.ModelServerSpec) error {
 		return err
 	}
 	defer cg.Close()
-	cmd := exec.Command(Binary, Args(spec)...)
+	cmd := exec.Command(binary(spec), Args(spec)...)
 	cmd.Stdout, cmd.Stderr = log, log
+	if len(gpus) > 0 {
+		// The server sees its GPUs only, as 0, 1 and on.
+		cmd.Env = append(os.Environ(), "CUDA_VISIBLE_DEVICES="+joinInts(gpus))
+	}
 	// A session of its own: the server outlives the node API. It starts in
 	// its cgroup, under the limit from its first instruction.
 	cmd.SysProcAttr = procAttr(cg)
@@ -211,7 +315,7 @@ func (s *Servers) start(name string, spec node.ModelServerSpec) error {
 	// Until it serves, a new server is the first the kernel stops when the
 	// servers run out of memory, not one that serves already.
 	_ = os.WriteFile(fmt.Sprintf("/proc/%d/oom_score_adj", cmd.Process.Pid), []byte("500"), 0o644)
-	if err := os.WriteFile(s.pidFile(name)+".config", []byte(configKey(spec)), 0o600); err != nil {
+	if err := os.WriteFile(s.pidFile(name)+".config", []byte(configKey(spec, gpus)), 0o600); err != nil {
 		return err
 	}
 	return os.WriteFile(s.pidFile(name), []byte(strconv.Itoa(cmd.Process.Pid)), 0o600)
@@ -359,7 +463,7 @@ func (s *Servers) Status(name string, spec node.ModelServerSpec) node.ModelServe
 	pid := s.pid(name)
 	if pid == 0 {
 		st := node.ModelServerStatus{Phase: "Starting", Message: lastLine(s.LogFile(name))}
-		if s.startedWith(name) == configKey(spec) {
+		if s.startedWith(name) == configKey(spec, s.GPUsOf(name)) {
 			// Started with these weights and settings, and gone: they do
 			// not run here. The next pass tries again.
 			st.Phase = "Failed"
@@ -367,9 +471,12 @@ func (s *Servers) Status(name string, spec node.ModelServerSpec) node.ModelServe
 		return st
 	}
 	st := node.ModelServerStatus{Phase: "Loading", PID: int32(pid)}
-	if f := strings.Fields(s.startedWith(name)); len(f) > 1 {
-		st.SHA256 = strings.TrimSuffix(filepath.Base(f[1]), ".gguf")
+	if f := strings.Fields(s.startedWith(name)); len(f) > 0 {
+		if i := slices.Index(f, "--model"); i >= 0 && i+1 < len(f) {
+			st.SHA256 = strings.TrimSuffix(filepath.Base(f[i+1]), ".gguf")
+		}
 	}
+	st.GPUIndexes = s.GPUsOf(name)
 	if info, err := os.Stat(fmt.Sprintf("/proc/%d", pid)); err == nil {
 		t := metav1.NewTime(info.ModTime())
 		st.StartedAt = &t
@@ -387,7 +494,7 @@ func (s *Servers) Delete(name string) error {
 			return err
 		}
 	}
-	for _, f := range []string{s.specFile(name), s.specFile(name) + ".previous", s.pidFile(name) + ".config"} {
+	for _, f := range []string{s.specFile(name), s.specFile(name) + ".previous", s.specFile(name) + ".gpus", s.pidFile(name) + ".config"} {
 		if err := os.Remove(f); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
