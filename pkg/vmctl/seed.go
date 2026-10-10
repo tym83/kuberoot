@@ -56,6 +56,7 @@ func (c *Controller) serveSeeds(ctx context.Context, gw string) {
 		}
 		host, _, _ := net.SplitHostPort(r.RemoteAddr)
 		if m.Status.MAC == "" || c.leases()[strings.ToLower(m.Status.MAC)] != host {
+			klog.Warningf("cloud-init data of %s refused to %s: not the machine's address", name, host)
 			http.Error(w, "not this machine's", http.StatusForbidden)
 			return
 		}
