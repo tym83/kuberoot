@@ -25,7 +25,7 @@ func TestUserData(t *testing.T) {
 	if err := yaml.Unmarshal([]byte(data), &doc); err != nil {
 		t.Fatalf("not YAML: %v\n%s", err, data)
 	}
-	for _, want := range []string{"hostname: anna-desk", "name: anna", "password: Secret123", "tigervncserver :1", "User=anna", "enable --now xrdp"} {
+	for _, want := range []string{"hostname: anna-desk", "name: anna", "password: Secret123", "tigervncserver :1", "-BlacklistThreshold 1000000", "User=anna", "enable --now xrdp"} {
 		if !strings.Contains(data, want) {
 			t.Errorf("user data lacks %q", want)
 		}

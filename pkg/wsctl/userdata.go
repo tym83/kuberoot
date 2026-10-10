@@ -21,7 +21,10 @@ const (
 // desktop is the machine's cloud-init user data: the owner's account, a
 // light desktop (Xfce), a VNC server that keeps the session running between
 // connections, and xrdp for RDP clients. Recommends are left out: no display
-// manager, no extra services.
+// manager, no extra services. Every browser reaches the VNC server from the
+// gateway's one address, so its blacklist, which locks an address out after
+// a few unauthenticated connections, would lock everyone out: the gateway's
+// token is what keeps strangers away.
 var desktop = template.Must(template.New("desktop").Parse(`#cloud-config
 hostname: {{.Hostname}}
 users:
@@ -59,7 +62,7 @@ write_files:
       WorkingDirectory=/home/{{.Owner}}
       Environment=HOME=/home/{{.Owner}}
       ExecStartPre=/bin/sh -c 'mkdir -p $HOME/.vnc && echo "$PASS" | tigervncpasswd -f > $HOME/.vnc/passwd && chmod 600 $HOME/.vnc/passwd'
-      ExecStart=/usr/bin/tigervncserver :1 -fg -localhost no -geometry 1600x900 -SecurityTypes VncAuth -xstartup /usr/bin/startxfce4
+      ExecStart=/usr/bin/tigervncserver :1 -fg -localhost no -geometry 1600x900 -SecurityTypes VncAuth -BlacklistThreshold 1000000 -xstartup /usr/bin/startxfce4
       Environment=PASS={{.Password}}
       Restart=always
       [Install]
