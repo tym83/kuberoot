@@ -63,16 +63,66 @@ func Validate(s node.LatencyTestSpec) error {
 }
 
 // CPUs to measure: those asked for, else those of real-time work, else all.
+// The kernel lists as tickless every CPU its arguments name, those the
+// machine does not have included (2-N reaches the most it could have): only
+// the ones online count.
 func CPUs(s node.LatencyTestSpec) string {
 	if s.CPUs != "" {
 		return s.CPUs
 	}
-	for _, f := range []string{NohzFull, Online} {
-		if raw, err := os.ReadFile(f); err == nil && strings.TrimSpace(string(raw)) != "" {
-			return strings.TrimSpace(string(raw))
-		}
+	online := readList(Online)
+	if rt := Intersect(readList(NohzFull), online); len(rt) > 0 {
+		return FormatCPUList(rt)
+	}
+	if len(online) > 0 {
+		return FormatCPUList(online)
 	}
 	return "0"
+}
+
+func readList(path string) []int {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	cpus, err := ParseCPUList(strings.TrimSpace(string(raw)))
+	if err != nil {
+		return nil
+	}
+	return cpus
+}
+
+// Intersect keeps the CPUs of a that are in b, in order.
+func Intersect(a, b []int) []int {
+	in := map[int]bool{}
+	for _, c := range b {
+		in[c] = true
+	}
+	var out []int
+	for _, c := range a {
+		if in[c] {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// FormatCPUList writes CPUs as the kernel does: 2-3,6.
+func FormatCPUList(cpus []int) string {
+	var parts []string
+	for i := 0; i < len(cpus); {
+		j := i
+		for j+1 < len(cpus) && cpus[j+1] == cpus[j]+1 {
+			j++
+		}
+		if j > i {
+			parts = append(parts, strconv.Itoa(cpus[i])+"-"+strconv.Itoa(cpus[j]))
+		} else {
+			parts = append(parts, strconv.Itoa(cpus[i]))
+		}
+		i = j + 1
+	}
+	return strings.Join(parts, ",")
 }
 
 // Args are cyclictest's arguments for a test writing its results to out:

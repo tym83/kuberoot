@@ -118,3 +118,26 @@ func TestCPUsPrefersTicklessOnes(t *testing.T) {
 		t.Errorf("asked for CPU 1: %q", got)
 	}
 }
+
+func TestCPUsKeepsOnlyOnlineTicklessCPUs(t *testing.T) {
+	dir := t.TempDir()
+	NohzFull, Online = dir+"/nohz_full", dir+"/online"
+	if err := os.WriteFile(NohzFull, []byte("2-63\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(Online, []byte("0-3\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := CPUs(node.LatencyTestSpec{}); got != "2-3" {
+		t.Fatalf("got %q: CPUs the machine does not have were measured", got)
+	}
+	if err := os.WriteFile(NohzFull, []byte("\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := CPUs(node.LatencyTestSpec{}); got != "0-3" {
+		t.Fatalf("got %q with no tickless CPU", got)
+	}
+	if got := FormatCPUList([]int{0, 2, 3, 4, 7}); got != "0,2-4,7" {
+		t.Fatalf("format: %q", got)
+	}
+}
