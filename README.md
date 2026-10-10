@@ -4,7 +4,7 @@
 
 kuberoot builds Kubernetes distributions that boot straight on hardware. Each one is a single image with its own Linux kernel, a small init that brings up Kubernetes, and a node that is managed through the Kubernetes API itself: there is no SSH, no shell and no separate node tool, `kubectl` reaches the node. Everything above the base is a [kubepkg](https://github.com/tym83/kubepkg) package, so a distribution is a base plus a meta package, the way a Linux distribution is a kernel plus packages.
 
-The repository builds five distributions: `edge`, a general-purpose cluster for one to a few nodes; `router`, Kubernetes without containers that runs a network router; `hypervisor`, virtual machines on KVM with their disks replicated between nodes, moved off a node that fails; `ai`, language models served as processes of the nodes behind one OpenAI-compatible endpoint, with new versions rolled out and back by the cluster; and `rt`, a real-time controller whose pods get whole CPUs with no timer tick on a fully preemptible kernel.
+The repository builds six distributions: `edge`, a general-purpose cluster for one to a few nodes; `router`, Kubernetes without containers that runs a network router; `hypervisor`, virtual machines on KVM with their disks replicated between nodes, moved off a node that fails; `ai`, language models served as processes of the nodes behind one OpenAI-compatible endpoint, with new versions rolled out and back by the cluster; `rt`, a real-time controller whose pods get whole CPUs with no timer tick on a fully preemptible kernel; and `iot`, a gateway with no containers that reads devices over Modbus and sends on what they say, its changes undone by themselves when they cut a device off.
 
 > Status: experimental. The `edge` distribution passes the Kubernetes conformance suite (462 of 462 on a three-node cluster, Kubernetes 1.37.1), but the API of the node and the layout of the state may still change.
 
@@ -153,6 +153,39 @@ spec: {durationSeconds: 300}
 
 The distribution needs four CPUs or more. The kernel is built for it apart from the other distributions' (`distros/rt/kernel.config`); on amd64 its CPU layout is part of the kernel's own command line.
 
+## The iot distribution
+
+`iot` is a gateway: it reads devices on the plant floor and sends on what they say. Like the router, it is Kubernetes without containers. The node keeps its devices and routes in its own API server as `devices.kuberoot.dev` resources, and `kuberoot-devices`, a process of the node, does the work. There is no kubelet, container runtime, kube-proxy or scheduler. The node is its kernel, its init, the API server and one controller.
+
+```yaml
+apiVersion: devices.kuberoot.dev/v1alpha1
+kind: Device
+metadata: {name: press-7}
+spec:
+  protocol: modbus-tcp
+  address: 10.0.5.20:502
+  every: 1s
+  points:
+  - {name: temperature, kind: holding, register: 0, type: int16, scale: "0.1", unit: "C"}
+  - {name: running, kind: coil, register: 0}
+---
+apiVersion: devices.kuberoot.dev/v1alpha1
+kind: Route
+metadata: {name: overheat}
+spec:
+  device: press-7
+  points: [temperature]
+  when: "running && temperature > 80"
+  to:
+    mqtt: {broker: "tcp://broker.plant:1883", topic: factory/press-7/alarm, qos: 1}
+```
+
+A Device is read on its schedule over one Modbus TCP connection. Its status shows whether it answers, and its values (`kubectl get devices` lists them). A Route sends every reading to an MQTT topic, or, with `when`, a CEL expression over the device's points, only each time the expression becomes true. A route that keeps its device and condition across a change remembers whether the condition held, so a change does not send the same alarm twice.
+
+Changes run on trial under a Safeguard (`kind: Safeguard`, named `default`). A change that makes a device that was answering go silent, or a broker that was taking messages unreachable, is undone at once: the node goes back to the last confirmed configuration, keeps it across reboots, and marks the resources it does not run `RolledBack` with the reason. A change that runs its trial healthy becomes final by itself, or only by `spec.confirm` with `autoConfirm: false`.
+
+Why without pods: a gateway does one job, close to the devices, often on small hardware and with nobody nearby. Here the protocol code, the configuration and the operating system are one image, upgraded together with A/B slots and rolled back together. The configuration is typed and checked when it is written. It goes through RBAC and audit, can be reviewed like code, and is undone by itself when it cuts a device off. On a test node the whole system took about 630 MiB, most of it the API server; `kuberoot-devices` took 35 MiB.
+
 ## Node API
 
 | Resource | What it does |
@@ -224,6 +257,7 @@ The node comes back as the same node, with the same name, certificates and clust
 | `cmd/kuberoot-router` | the router controller |
 | `cmd/kuberoot-vmctl` | the virtual machines controller |
 | `cmd/kuberoot-aictl` | the models controller and endpoint |
+| `cmd/kuberoot-devices` | the devices controller of the iot distribution |
 | `cmd/mkimage`, `cmd/kuberoot-release` | boot media and signed releases |
 | `pkg/` | the libraries behind them |
 | `distros/` | the distributions: services, modules, add-ons, packages |

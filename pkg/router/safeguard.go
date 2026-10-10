@@ -4,10 +4,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"os"
 	"time"
 
 	v1 "github.com/tym83/kuberoot/pkg/apis/router/v1alpha1"
+	"github.com/tym83/kuberoot/pkg/safeguard"
 )
 
 // Revision names a configuration by what it asks of the node: the specs of
@@ -47,75 +47,15 @@ func Revision(c Config) string {
 	return hex.EncodeToString(sum[:])[:12]
 }
 
-// trial decides which configuration the node runs under a Safeguard: the
-// one the resources describe, on trial until it is confirmed, or the last
-// confirmed one once the trial ran out.
-type trial struct {
-	confirmed    Config
-	confirmedRev string
-	pending      string
-	deadline     time.Time
-	rolledBack   string
-}
+// trial is the router's configuration under its Safeguard.
+type trial struct{ safeguard.Trial[Config] }
 
 // decide returns the configuration to run and its revision. It reports
 // whether the confirmed configuration changed, to be kept on disk.
 func (t *trial) decide(candidate Config, rev string, guard *v1.Safeguard, now time.Time) (Config, string, bool) {
-	confirm := func() (Config, string, bool) {
-		changed := t.confirmedRev != rev
-		t.confirmed, t.confirmedRev, t.pending, t.deadline, t.rolledBack = candidate, rev, "", time.Time{}, ""
-		return candidate, rev, changed
+	var g *safeguard.Guard
+	if guard != nil {
+		g = &safeguard.Guard{ConfirmWithin: guard.Spec.ConfirmWithin.Duration, Confirm: guard.Spec.Confirm}
 	}
-	switch {
-	case guard == nil, t.confirmedRev == "", rev == t.confirmedRev:
-		return confirm()
-	case guard.Spec.Confirm == rev:
-		return confirm()
-	case rev == t.rolledBack:
-		// Undone already; it stays undone until the resources change.
-		return t.confirmed, t.confirmedRev, false
-	}
-	if t.pending != rev {
-		within := guard.Spec.ConfirmWithin.Duration
-		if within <= 0 {
-			within = 2 * time.Minute
-		}
-		t.pending, t.deadline = rev, now.Add(within)
-	}
-	if !now.Before(t.deadline) {
-		// Kept on disk: after a restart the undone revision stays undone.
-		t.rolledBack, t.pending, t.deadline = rev, "", time.Time{}
-		return t.confirmed, t.confirmedRev, true
-	}
-	return candidate, rev, false
-}
-
-// savedTrial is the confirmed configuration as kept on disk.
-type savedTrial struct {
-	Revision   string `json:"revision"`
-	Config     Config `json:"config"`
-	RolledBack string `json:"rolledBack,omitempty"`
-}
-
-func (t *trial) save(path string) error {
-	raw, err := json.Marshal(savedTrial{t.confirmedRev, t.confirmed, t.rolledBack})
-	if err != nil {
-		return err
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, raw, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
-}
-
-func (t *trial) load(path string) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return
-	}
-	var s savedTrial
-	if json.Unmarshal(raw, &s) == nil {
-		t.confirmed, t.confirmedRev, t.rolledBack = s.Config, s.Revision, s.RolledBack
-	}
+	return t.Decide(candidate, rev, g, "", now)
 }
