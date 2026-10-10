@@ -61,7 +61,7 @@ command -v cmake >/dev/null || { apt-get -qq update && apt-get -qq install -y cm
 src="$WORK/src/llama.cpp-$LLAMA_CPP_VERSION"
 [ -d "$src" ] || git clone -q --depth 1 --branch "$LLAMA_CPP_VERSION" https://github.com/ggml-org/llama.cpp "$src"
 b="$WORK/build-llama-cuda-$ARCH"
-jobs=$(nproc); [ "$jobs" -le 8 ] || jobs=8
+jobs=$(nproc); [ "$jobs" -le 6 ] || jobs=6
 # Turing (T4), Ampere (A100, A10, 30xx), Ada (L4, 40xx), Hopper (H100).
 PATH="$cuda/bin:$PATH" cmake -S "$src" -B "$b" -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_CUDA_COMPILER="$cuda/bin/nvcc" -DCUDAToolkit_ROOT="$cuda" \
