@@ -317,6 +317,7 @@ type HeartbeatQuery struct {
 }
 
 type HeartbeatStatus struct {
+	Status `json:",inline"`
 	// Healthy: the last beat went.
 	Healthy  bool         `json:"healthy,omitempty"`
 	Sent     int64        `json:"sent,omitempty"`
