@@ -10,9 +10,12 @@ require (
 	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/google/cel-go v0.29.2
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
+	github.com/gosnmp/gosnmp v1.45.0
 	github.com/insomniacslk/dhcp v0.0.0-20260901064844-234b97448fae
+	github.com/prometheus/client_golang v1.24.0
 	github.com/simonvetter/modbus v1.6.4
 	github.com/vishvananda/netlink v1.3.1
+	golang.org/x/net v0.57.0
 	golang.org/x/sys v0.48.0
 	k8s.io/api v0.37.1
 	k8s.io/apimachinery v0.37.1
@@ -94,7 +97,6 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.26 // indirect
 	github.com/pkg/xattr v0.4.12 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/prometheus/client_golang v1.24.0 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.70.0 // indirect
 	github.com/prometheus/procfs v0.21.1 // indirect
@@ -124,10 +126,9 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
-	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.54.0 // indirect
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
-	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/term v0.45.0 // indirect
