@@ -4,7 +4,7 @@
 
 kuberoot builds Kubernetes distributions that boot straight on hardware. Each one is a single image with its own Linux kernel, a small init that brings up Kubernetes, and a node that is managed through the Kubernetes API itself: there is no SSH, no shell and no separate node tool, `kubectl` reaches the node. Everything above the base is a [kubepkg](https://github.com/tym83/kubepkg) package, so a distribution is a base plus a meta package, the way a Linux distribution is a kernel plus packages.
 
-The repository builds six distributions: `edge`, a general-purpose cluster for one to a few nodes; `router`, Kubernetes without containers that runs a network router; `hypervisor`, virtual machines on KVM with their disks replicated between nodes, moved off a node that fails; `ai`, language models served as processes of the nodes behind one OpenAI-compatible endpoint, with new versions rolled out and back by the cluster; `rt`, a real-time controller whose pods get whole CPUs with no timer tick on a fully preemptible kernel; and `iot`, a gateway with no containers that reads devices over Modbus and sends on what they say, its changes undone by themselves when they cut a device off.
+The repository builds seven distributions: `edge`, a general-purpose cluster for one to a few nodes; `router`, Kubernetes without containers that runs a network router; `hypervisor`, virtual machines on KVM with their disks replicated between nodes, moved off a node that fails; `ai`, language models served as processes of the nodes behind one OpenAI-compatible endpoint, with new versions rolled out and back by the cluster; `rt`, a real-time controller whose pods get whole CPUs with no timer tick on a fully preemptible kernel; `iot`, a gateway with no containers that reads devices over Modbus and sends on what they say, its changes undone by themselves when they cut a device off; and `workstation`, people's desktops as virtual machines of the cluster, opened from a browser or an RDP client.
 
 > Status: experimental. The `edge` distribution passes the Kubernetes conformance suite (462 of 462 on a three-node cluster, Kubernetes 1.37.1), but the API of the node and the layout of the state may still change.
 
@@ -192,6 +192,29 @@ Changes run on trial under a Safeguard (`kind: Safeguard`, named `default`). A c
 
 Why without pods: a gateway does one job, close to the devices, often on small hardware and with nobody nearby. Here the protocol code, the configuration and the operating system are one image, upgraded together with A/B slots and rolled back together. The configuration is typed and checked when it is written. It goes through RBAC and audit, can be reviewed like code, and is undone by itself when it cuts a device off. On a test node the whole system took about 630 MiB, most of it the API server; `kuberoot-devices` took 35 MiB.
 
+## The workstation distribution
+
+`workstation` keeps people's desktops in the cluster: VDI without Citrix or vCenter. It is the hypervisor distribution with workspaces on top. A workspace is a virtual machine with a desktop and a replicated disk. It keeps running when the laptop that opened it closes, and it moves between nodes like any machine.
+
+```yaml
+apiVersion: workstation.kuberoot.dev/v1alpha1
+kind: Workspace
+metadata: {name: anna}
+spec:
+  owner: anna
+  cpus: 2
+  memory: 2Gi
+  disk: 8Gi
+```
+
+`kuberoot-wsctl`, on the control plane, makes the workspace a VirtualMachine from a cloud image (Ubuntu 24.04 unless `spec.image` names another). The image's cloud-init installs the desktop at the first boot: the owner's account, Xfce, a VNC server that keeps the session running between connections, and xrdp for RDP clients. The workspace is `Provisioning` until its desktop answers, then `Ready`. Its status gives the address to open it at in a browser (`status.url`) and the one for an RDP client (`status.rdp`). The Secret `status.credentials` names holds the workspace's token and the owner's password.
+
+The gateway is part of `kuberoot-wsctl`, a process of the control plane node, port 6080. For a browser that brings the workspace's token it serves noVNC and carries noVNC's WebSocket to the desktop's VNC server, which then asks for the owner's password. Each workspace also gets an RDP port of its own on the node, passed through to xrdp. cloud-hypervisor has no graphical console, so the desktop is served by the guest itself; the cluster gives the way in. The gateway serves plain HTTP for now: put it behind TLS, and single sign-on (OIDC) in place of tokens is the next step.
+
+The machine's cloud-init data comes from the machines' gateway, not from a seed disk: a VirtualMachine may carry `userData`, inline or in a Secret, which the gateway serves to that machine's address only, and the machine finds it through its DMI serial number (`ds=nocloud;s=…`). Any VirtualMachine of the hypervisor distribution can use it.
+
+A Windows desktop fits the same way: a Windows image with RDP enabled and its own unattended setup in place of cloud-init, and RemoteApp to open single applications rather than a whole desktop. It needs licences, which is why the demonstration uses Linux.
+
 ## Node API
 
 | Resource | What it does |
@@ -264,6 +287,7 @@ The node comes back as the same node, with the same name, certificates and clust
 | `cmd/kuberoot-vmctl` | the virtual machines controller |
 | `cmd/kuberoot-aictl` | the models controller and endpoint |
 | `cmd/kuberoot-devices` | the devices controller of the iot distribution |
+| `cmd/kuberoot-wsctl` | the workspaces controller and their gateway |
 | `cmd/mkimage`, `cmd/kuberoot-release` | boot media and signed releases |
 | `pkg/` | the libraries behind them |
 | `distros/` | the distributions: services, modules, add-ons, packages |
