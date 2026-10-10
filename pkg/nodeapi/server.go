@@ -28,10 +28,12 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	basecompatibility "k8s.io/component-base/compatibility"
+	"k8s.io/klog/v2"
 
 	"github.com/tym83/kuberoot/pkg/apis/node"
 	"github.com/tym83/kuberoot/pkg/apis/node/install"
 	"github.com/tym83/kuberoot/pkg/generated/openapi"
+	"github.com/tym83/kuberoot/pkg/gpu"
 	"github.com/tym83/kuberoot/pkg/supervisor"
 )
 
@@ -84,6 +86,10 @@ type Options struct {
 	// with all its memory but ModelReserveMiB for them.
 	ModelServers    bool
 	ModelReserveMiB int64
+
+	// GPUs: make the node's NVIDIA GPUs usable, device files and their CDI
+	// description for the container runtime.
+	GPUs bool
 
 	// LatencyTests: the node measures the latency it delivers to real-time
 	// tasks (latencytests resource).
@@ -221,6 +227,9 @@ func Run(ctx context.Context, o Options) error {
 	if models != nil {
 		go models.run(ctx)
 	}
+	if o.GPUs {
+		go setupGPUs(ctx)
+	}
 	if vms != nil {
 		go vms.run(ctx)
 		if o.VMNetworkKubeconfig != "" {
@@ -337,4 +346,22 @@ func withRequestHost(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), requestHostKey{}, r.Host)))
 	})
+}
+
+// setupGPUs makes the GPUs usable, trying again while the driver comes up.
+func setupGPUs(ctx context.Context) {
+	for i := 0; i < 30 && ctx.Err() == nil; i++ {
+		gpus, err := gpu.Setup()
+		if err == nil {
+			if len(gpus) > 0 {
+				klog.Infof("GPUs: %d ready for containers", len(gpus))
+			}
+			return
+		}
+		klog.Errorf("GPUs: %v", err)
+		select {
+		case <-ctx.Done():
+		case <-time.After(10 * time.Second):
+		}
+	}
 }

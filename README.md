@@ -84,7 +84,7 @@ Each node serves its part through the node API: `volumes` (the disks on it, with
 
 ## The ai distribution
 
-`ai` serves language models with no pods and no container images: each node runs llama-server, built into the image as one static binary for the CPU, as a process of its own. A model is a resource of the cluster:
+`ai` is a cluster for inference and training: edge, pods and packages included, with a way of its own to serve language models that needs no pods and no container images. Each node runs llama-server, built into the image, as a process of its own. A model is a resource of the cluster:
 
 ```yaml
 apiVersion: ai.kuberoot.dev/v1alpha1
@@ -101,9 +101,15 @@ spec:
 
 `kuberoot-aictl`, on the control plane, places the model on as many nodes as it has replicas. Each node downloads the weights, uses them only if they match their hash, and starts the server. The control plane serves every model at one OpenAI-compatible endpoint, port 8000: `/v1/models`, and `/v1/chat/completions` and the other `/v1` calls, routed by the model the request names to its ready replicas in turn, with streamed answers passed through as they come. The endpoint has no authentication of its own yet: it is meant for a network the cluster trusts.
 
-A new `spec.source` is a new version. It goes to one node first; once it is ready there and answers a trial request, the other nodes take it one at a time, each after the one before serves it, so the model never loses more than one replica to the change. A version that fails to start on the first node, is not ready there in fifteen minutes, or does not answer, is rolled back: every node stays on the version before, and `status.failedSHA256` keeps it from being tried again until `spec.source` changes. `status.previous` is the version before the current one; its weights stay on the nodes, and setting `spec.source` back to it rolls the model back at once.
+A new `spec.source` is a new version. It goes to one node first; once it is ready there and answers a trial request, the other nodes take it one at a time, each after the one before serves it, so the model never loses more than one replica to the change. A version that fails to start on the first node, is not ready there in fifteen minutes, or does not answer, is rolled back: every node stays on the version before, and `status.failedVersion` keeps it from being tried again until `spec.source` changes. `status.previous` is the version before the current one; its weights stay on the nodes, and setting `spec.source` back to it rolls the model back at once.
 
 Each node serves its part through the node API: `modelservers` (the models it serves, their phase and the weights they run) and `modelservers/log` (the server's output).
+
+### GPUs and packages
+
+The ai distribution is edge with pods and packages, so everything else for AI work comes as kubepkg packages: GPU sharing, queues, serving engines, training and vector databases, and ready-made combinations of them.
+
+The NVIDIA driver is part of the image, not a container that installs it. The open kernel modules are built against kuberoot's kernel and signed with its key, the only modules it loads. The CUDA driver library, NVML, nvidia-smi and the GSP firmware come from the same driver release. A node with NVIDIA GPUs loads the driver at boot. kuberoot-node creates the device files and describes the GPUs to containerd as CDI devices (`nvidia.com/gpu=0`, `=all`), for a device plugin to hand them to pods, and OSConfig lists them in `status.gpus`; kuberoot-aictl labels such nodes `nvidia.com/gpu.present=true` for GPU packages to find them, and the NVIDIA CDI hook in the image refreshes a container's loader cache for the driver libraries it is given. A node without NVIDIA GPUs goes on without the driver. A Model can run on GPUs too: `spec.gpus` per replica places it only on nodes with as many free and runs it with every layer on the GPUs, served by the engine its source names: a llama-server built for CUDA (Turing to Hopper), published beside each release. An engine is fetched like the weights, by the nodes that run it, so the image stays small and the engine changes without the OS; a new engine is a new version of the model and rolls out like new weights. GPUs given to models are best kept from the device plugin's pods.
 
 ### The operator agent
 

@@ -28,9 +28,12 @@ spec:
   containers:
   - name: tools
     image: golang:1.26-bookworm
-    command: [sleep, infinity]
+    command: [sh, -c, "mkdir -p /work/tmp && exec sleep infinity"]
     workingDir: /work
     env:
+    # Compilers' temporaries go to the volume: the container's own disk is
+    # small, and filling it evicts the whole pod.
+    - {name: TMPDIR, value: /work/tmp}
     - {name: GOPATH, value: /work/go}
     - {name: GOCACHE, value: /work/gocache}
     - {name: GOFLAGS, value: -mod=mod}
@@ -41,7 +44,9 @@ spec:
     - {name: work, mountPath: /work}
   - name: alpine
     image: alpine:3.22
-    command: [sleep, infinity]
+    command: [sh, -c, "mkdir -p /work/tmp && exec sleep infinity"]
+    env:
+    - {name: TMPDIR, value: /work/tmp}
     resources:
       requests: {cpu: 50m, memory: 256Mi}
       limits: {cpu: "2", memory: 2Gi}

@@ -39,8 +39,23 @@ func TestParseCmdline(t *testing.T) {
 	if len(cfg.nameservers) != 2 || cfg.static != "eth1:10.0.0.5/24" || cfg.distro != "router" || cfg.podCIDR != "10.50.0.0/16" {
 		t.Errorf("values = %+v", cfg)
 	}
-	if def := parseCmdline(""); def.distro != "edge" || def.repo == "" {
+	def := parseCmdline("")
+	if def.distro != "" || def.repo == "" {
 		t.Errorf("defaults = %+v", def)
+	}
+	// Not asked for at boot: the distribution the image was built as.
+	saved := activeProfile
+	defer func() { activeProfile = saved }()
+	activeProfile = nil
+	if got := distroName(def); got != "edge" {
+		t.Errorf("no profile: %s", got)
+	}
+	activeProfile, _ = loadProfileFile("../../distros/ai/profile.yaml")
+	if got := distroName(def); got != "ai" {
+		t.Errorf("an ai image installs %s", got)
+	}
+	if got := distroName(cfg); got != "router" {
+		t.Errorf("asked for router at boot: %s", got)
 	}
 }
 
