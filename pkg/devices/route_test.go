@@ -2,6 +2,7 @@ package devices
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -59,5 +60,12 @@ func TestMessage(t *testing.T) {
 	values := m["values"].(map[string]any)
 	if m["device"] != "press-7" || values["temperature"] != 85.3 || values["running"] != nil || m["when"] != "temperature > 80" {
 		t.Fatalf("message %s", raw)
+	}
+}
+
+func TestMessageKeepsConditionReadable(t *testing.T) {
+	raw := Message("p", v1.RouteSpec{When: "running && temperature > 80"}, press, Reading{"temperature": 1, "running": 1}, time.Now())
+	if !strings.Contains(string(raw), `"when":"running && temperature > 80"`) {
+		t.Fatalf("condition escaped: %s", raw)
 	}
 }

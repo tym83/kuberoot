@@ -170,7 +170,8 @@ type MQTT struct {
 
 type RouteStatus struct {
 	Status `json:",inline"`
-	// Sent counts the messages sent since the controller started.
+	// Sent counts the messages sent since the controller started, or since
+	// the route's device or condition last changed.
 	Sent     int64        `json:"sent,omitempty"`
 	LastSent *metav1.Time `json:"lastSent,omitempty"`
 	// Connected: the destination takes messages.

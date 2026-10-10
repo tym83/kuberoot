@@ -167,7 +167,9 @@ spec:
                 format: int64
                 type: integer
               sent:
-                description: Sent counts the messages sent since the controller started.
+                description: |-
+                  Sent counts the messages sent since the controller started, or since
+                  the route's device or condition last changed.
                 format: int64
                 type: integer
             type: object

@@ -352,7 +352,15 @@ func (c *Controller) apply(cfg Config) {
 			continue
 		}
 		cond, _ := Compile(r.Spec.When, want[r.Spec.Device].Points) // checked already
-		routes[r.Name] = &route{spec: r.Spec, cond: cond}
+		nr := &route{spec: r.Spec, cond: cond}
+		// Same device, same condition: it remembers whether the condition
+		// held, so a change elsewhere (or undoing one) sends no alarm again.
+		if old, ok := c.routes[r.Name]; ok && old.spec.Device == r.Spec.Device && old.spec.When == r.Spec.When {
+			old.mu.Lock()
+			nr.edge, nr.sent, nr.lastSent = old.edge, old.sent, old.lastSent
+			old.mu.Unlock()
+		}
+		routes[r.Name] = nr
 		c.brokers.client(r.Spec.To.MQTT.Broker)
 	}
 	c.routes = routes
@@ -466,7 +474,11 @@ func (c *Controller) report(ctx context.Context, l listed, problem string, undon
 			for _, p := range d.spec.Points {
 				if v, ok := d.reading[p.Name]; ok {
 					s := Format(p, v)
-					values = append(values, map[string]any{"name": p.Name, "value": s, "unit": p.Unit})
+					v := map[string]any{"name": p.Name, "value": s}
+					if p.Unit != "" {
+						v["unit"] = p.Unit
+					}
+					values = append(values, v)
 					summary = append(summary, p.Name+"="+s+p.Unit)
 				}
 			}

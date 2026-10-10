@@ -1,6 +1,7 @@
 package devices
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -108,6 +109,9 @@ func Message(device string, route v1.RouteSpec, points []v1.Point, r Reading, at
 	if route.When != "" {
 		msg["when"] = route.When
 	}
-	raw, _ := json.Marshal(msg)
-	return raw
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false) // a condition reads as written: && and >, not \u0026
+	_ = enc.Encode(msg)
+	return bytes.TrimRight(b.Bytes(), "\n")
 }
