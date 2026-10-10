@@ -57,11 +57,23 @@ func repoKey(cfg bootConfig) (string, error) {
 	return string(raw), nil
 }
 
+// distroName is the distribution asked for at boot, else the one the image
+// was built as.
+func distroName(cfg bootConfig) string {
+	switch {
+	case cfg.distro != "":
+		return cfg.distro
+	case activeProfile != nil && activeProfile.Metadata.Name != "":
+		return activeProfile.Metadata.Name
+	}
+	return "edge"
+}
+
 // installDistro installs the distribution's meta package; the kubepkg CLI
 // resolves what it requires and the operator installs it. Packages already
 // present, like CoreDNS with its address, keep their settings.
 func installDistro(ctx context.Context, cfg bootConfig) {
-	pkg := "kuberoot-" + cfg.distro
+	pkg := "kuberoot-" + distroName(cfg)
 	env := []string{"KUBECONFIG=" + kubeDir + "/admin.kubeconfig", "HOME=" + kubepkgCacheDir}
 	if runUntilSuccess(ctx, []string{"/usr/bin/kubepkg", "install", pkg, "--yes"}, env, 10*time.Second) {
 		log.Printf("distribution %s requested from %s", pkg, cfg.repo)
