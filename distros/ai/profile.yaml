@@ -1,24 +1,40 @@
-# The ai distribution: language models served by llama-server as processes
-# of the nodes, with no pods and no container images. The cluster's API holds
-# the models (ai.kuberoot.dev); kuberoot-aictl places their replicas, rolls a
-# new version out behind a first node that must answer, rolls back when it
-# does not, and serves every model at one OpenAI-compatible endpoint on the
-# control plane. The kubelet stays for what the cluster knows of its nodes:
-# registration and the heartbeat that tells a failed node. No pods run.
+# The ai distribution: a cluster for inference and training. It is edge,
+# pods and packages included, with two things of its own. Language models run
+# as processes of the nodes, served by llama-server with no pod and no image,
+# kept by kuberoot-aictl behind one OpenAI-compatible endpoint (port 8000)
+# with versions rolled out behind a first node that must answer and rolled
+# back when it does not. And an operator agent proposes remedies that a
+# person, or a policy, approves. Everything else for AI work (GPU sharing,
+# queues, serving engines, training, vector databases) comes as packages.
 apiVersion: kuberoot.dev/v1alpha1
 kind: Distribution
 metadata:
   name: ai
 spec:
+  # DRBD 9 for replicated volumes (LINSTOR, Piraeus); the operator manages
+  # it, so DRBD runs no helper programs of its own.
+  modules:
+  - name: drbd
+    params: usermode_helper=disabled
+  - name: drbd_transport_tcp
+  # The NVIDIA driver: the GPU, the memory CUDA uses, and what links against
+  # the display side. On a node with no NVIDIA GPU they do not load, and the
+  # node goes on without them.
+  - name: nvidia
+  - name: nvidia_uvm
+  - name: nvidia_modeset
   sysctls:
     net.ipv4.ip_forward: "1"
     net.ipv6.conf.all.forwarding: "1"
+    net.bridge.bridge-nf-call-iptables: "1"
+    net.bridge.bridge-nf-call-ip6tables: "1"
     fs.inotify.max_user_instances: "8192"
     fs.inotify.max_user_watches: "524288"
   roles:
     controlPlane:
       generators: [node, cluster, containers, kubelet]
       addons: true
+      packages: true
       services:
       - name: kuberoot-node
         args:
@@ -41,8 +57,9 @@ spec:
         - --routes-kubeconfig={{kube "admin.kubeconfig"}}
         - --pod-cidr={{.Net.Pod}}
         - --pod-network={{.Net.PodNetwork}}
-        - --service-cidr={{.Net.Service}}
         - --model-servers
+        - --gpus
+        - --service-cidr={{.Net.Service}}
       - name: containerd
         args: [/usr/bin/containerd, --config, /etc/containerd/config.toml]
       - name: kine
@@ -111,6 +128,14 @@ spec:
         - --node-cidr-mask-size=24
         - --service-cluster-ip-range={{.Net.Service}}
         - --leader-elect=false
+      - name: kube-scheduler
+        after: apiserver
+        args:
+        - /usr/bin/kube-scheduler
+        - --kubeconfig={{kube "scheduler.kubeconfig"}}
+        - --authentication-kubeconfig={{kube "scheduler.kubeconfig"}}
+        - --authorization-kubeconfig={{kube "scheduler.kubeconfig"}}
+        - --leader-elect=false
       - name: kubelet
         after: apiserver
         args:
@@ -119,10 +144,40 @@ spec:
         - --kubeconfig={{kube "kubelet-client.kubeconfig"}}
         - --hostname-override={{.Node.Name}}
         - --node-ip={{.Node.IP}}
+      - name: kube-proxy
+        after: apiserver
+        args:
+        - /usr/bin/kube-proxy
+        - --kubeconfig={{kube "kube-proxy.kubeconfig"}}
+        - --proxy-mode=nftables
+        - --cluster-cidr={{.Net.Pod}}
+        - --hostname-override={{.Node.Name}}
       # Intents: lowers Apps to primitives and runs Overrides.
       - name: kuberoot-intents
         after: apiserver
         args: [/usr/bin/kuberoot-intents, '--kubeconfig={{kube "intents.kubeconfig"}}']
+      # The package manager of the distribution: cluster add-ons are kubepkg packages.
+      - name: kubepkg-operator
+        after: apiserver
+        env: [KUBECONFIG=/etc/kubernetes/admin.kubeconfig, HOME=/var/lib/kubepkg]
+        args:
+        - /usr/bin/kubepkg-operator
+        - --backend=helm
+        - --cache-dir=/var/lib/kubepkg/cache
+        # What kuberoot nodes are like, for packages that need to know.
+        - --values-secret=kube-system/kuberoot-platform-values
+        # Credentials for private registries, when this Secret exists
+        # (kubernetes.io/dockerconfigjson); without it, downloads go without.
+        - --registry-secret=kube-system/kuberoot-registry-credentials
+        # Pods in package namespaces run only the images their packages pin.
+        - --image-policy=enforce
+        - --webhook-namespace=kube-system
+        - --webhook-service=kubepkg-webhook
+        - --webhook-secret=kubepkg-webhook-tls
+        - --webhook-config=kubepkg-images
+        - --metrics-bind-address=0
+        - --health-probe-bind-address=0
+        - '{{if .Boot.RepoPlainHTTP}}--plain-http{{end}}'
       # Places the cluster's models, rolls their versions out and back, and
       # serves them at the OpenAI-compatible endpoint, port 8000.
       - name: kuberoot-aictl
@@ -157,6 +212,7 @@ spec:
         - --pod-cidr={{.Net.Pod}}
         - --pod-network={{.Net.PodNetwork}}
         - --model-servers
+        - --gpus
       - name: containerd
         args: [/usr/bin/containerd, --config, /etc/containerd/config.toml]
       - name: kubelet
@@ -168,3 +224,11 @@ spec:
         - --cert-dir=/var/lib/kubelet/pki
         - --hostname-override={{.Node.Name}}
         - --node-ip={{.Node.IP}}
+      - name: kube-proxy
+        after: kubelet-cert
+        args:
+        - /usr/bin/kube-proxy
+        - --kubeconfig={{kube "kube-proxy.kubeconfig"}}
+        - --proxy-mode=nftables
+        - --cluster-cidr={{.Net.Pod}}
+        - --hostname-override={{.Node.Name}}

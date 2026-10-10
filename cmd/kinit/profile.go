@@ -80,7 +80,7 @@ func roleFacts(r roleContext, cfg bootConfig) facts {
 	f.Net.Pod, f.Net.Service = r.net.pod.String(), r.net.service.String()
 	f.Net.DNS = r.net.dnsIP().String()
 	f.Net.PodNetwork = cfg.podNetwork
-	f.Boot.Distro, f.Boot.RepoPlainHTTP = cfg.distro, cfg.repoPlainHTTP
+	f.Boot.Distro, f.Boot.RepoPlainHTTP = distroName(cfg), cfg.repoPlainHTTP
 	return f
 }
 

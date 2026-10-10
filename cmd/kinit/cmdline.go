@@ -16,7 +16,8 @@ type bootConfig struct {
 	// install runs the console installer: the system booted from boot media.
 	install bool
 	// distro names the kuberoot distribution; its add-ons are the kubepkg
-	// meta package kuberoot-<distro>.
+	// meta package kuberoot-<distro>. Unset, it is the distribution the
+	// image was built as.
 	distro string
 	// repo is the kubepkg repository index, repoKey its public key (base64 PEM),
 	// and repoPlainHTTP allows a test registry without TLS.
@@ -76,9 +77,6 @@ func parseCmdline(cmdline string) bootConfig {
 				cfg.podNetwork = v
 			}
 		}
-	}
-	if cfg.distro == "" {
-		cfg.distro = "edge"
 	}
 	switch cfg.podNetwork {
 	case "vxlan", "host-gw", "none":

@@ -35,6 +35,19 @@ type OSConfigStatus struct {
 	BootTime    metav1.Time `json:"bootTime,omitempty"`
 	MemoryTotal int64       `json:"memoryTotal,omitempty"`
 	MemoryFree  int64       `json:"memoryFree,omitempty"`
+	// GPUs the node's NVIDIA driver drives.
+	// +listType=atomic
+	GPUs []NodeGPU `json:"gpus,omitempty"`
+}
+
+// NodeGPU is a GPU of the node.
+type NodeGPU struct {
+	// Index is the GPU's device minor: /dev/nvidia<index>, and its name as a
+	// CDI device, nvidia.com/gpu=<index>.
+	Index int32  `json:"index"`
+	Model string `json:"model,omitempty"`
+	UUID  string `json:"uuid,omitempty"`
+	BusID string `json:"busID,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -511,6 +524,15 @@ type ModelServerSpec struct {
 	Parallel    int32 `json:"parallel,omitempty"`
 	// Threads for generation; all the node's CPUs when 0.
 	Threads int32 `json:"threads,omitempty"`
+	// GPUs: NVIDIA GPUs of the node the server runs the model on, all of its
+	// layers; none runs it on the CPUs. A server on GPUs needs an engine
+	// built for CUDA.
+	GPUs int32 `json:"gpus,omitempty"`
+	// EngineURL and EngineSHA256 name the program that serves the model in
+	// place of the llama-server built into the image, fetched like the
+	// weights and used only when it matches its hash.
+	EngineURL    string `json:"engineURL,omitempty"`
+	EngineSHA256 string `json:"engineSHA256,omitempty"`
 }
 
 type ModelServerStatus struct {
@@ -520,6 +542,12 @@ type ModelServerStatus struct {
 	PID     int32  `json:"pid,omitempty"`
 	// SHA256 of the weights the running server has loaded.
 	SHA256 string `json:"sha256,omitempty"`
+	// EngineSHA256 of the program the running server is, when not the
+	// built-in one.
+	EngineSHA256 string `json:"engineSHA256,omitempty"`
+	// GPUIndexes are the GPUs the server was given.
+	// +listType=atomic
+	GPUIndexes []int32 `json:"gpuIndexes,omitempty"`
 	// Downloaded bytes of the weights, while they download.
 	Downloaded int64        `json:"downloaded,omitempty"`
 	StartedAt  *metav1.Time `json:"startedAt,omitempty"`

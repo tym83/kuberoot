@@ -67,6 +67,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.ModelServerList":     schema_pkg_apis_node_v1alpha1_ModelServerList(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.ModelServerSpec":     schema_pkg_apis_node_v1alpha1_ModelServerSpec(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.ModelServerStatus":   schema_pkg_apis_node_v1alpha1_ModelServerStatus(ref),
+		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.NodeGPU":             schema_pkg_apis_node_v1alpha1_NodeGPU(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.NodeService":         schema_pkg_apis_node_v1alpha1_NodeService(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.NodeServiceList":     schema_pkg_apis_node_v1alpha1_NodeServiceList(ref),
 		"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.NodeServiceSpec":     schema_pkg_apis_node_v1alpha1_NodeServiceSpec(ref),
@@ -1767,6 +1768,26 @@ func schema_pkg_apis_node_v1alpha1_ModelServerSpec(ref common.ReferenceCallback)
 							Format:      "int32",
 						},
 					},
+					"gpus": {
+						SchemaProps: spec.SchemaProps{
+							Description: "GPUs: NVIDIA GPUs of the node the server runs the model on, all of its layers; none runs it on the CPUs. A server on GPUs needs an engine built for CUDA.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"engineURL": {
+						SchemaProps: spec.SchemaProps{
+							Description: "EngineURL and EngineSHA256 name the program that serves the model in place of the llama-server built into the image, fetched like the weights and used only when it matches its hash.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"engineSHA256": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
 				},
 				Required: []string{"url", "sha256", "model", "port"},
 			},
@@ -1806,6 +1827,32 @@ func schema_pkg_apis_node_v1alpha1_ModelServerStatus(ref common.ReferenceCallbac
 							Format:      "",
 						},
 					},
+					"engineSHA256": {
+						SchemaProps: spec.SchemaProps{
+							Description: "EngineSHA256 of the program the running server is, when not the built-in one.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"gpuIndexes": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "GPUIndexes are the GPUs the server was given.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"integer"},
+										Format: "int32",
+									},
+								},
+							},
+						},
+					},
 					"downloaded": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Downloaded bytes of the weights, while they download.",
@@ -1823,6 +1870,46 @@ func schema_pkg_apis_node_v1alpha1_ModelServerStatus(ref common.ReferenceCallbac
 		},
 		Dependencies: []string{
 			v1.Time{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_node_v1alpha1_NodeGPU(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NodeGPU is a GPU of the node.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"index": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Index is the GPU's device minor: /dev/nvidia<index>, and its name as a CDI device, nvidia.com/gpu=<index>.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"model": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"uuid": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"busID": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+				Required: []string{"index"},
+			},
+		},
 	}
 }
 
@@ -2217,11 +2304,29 @@ func schema_pkg_apis_node_v1alpha1_OSConfigStatus(ref common.ReferenceCallback) 
 							Format: "int64",
 						},
 					},
+					"gpus": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "GPUs the node's NVIDIA driver drives.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.NodeGPU"),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			v1.Time{}.OpenAPIModelName()},
+			"github.com/tym83/kuberoot/pkg/apis/node/v1alpha1.NodeGPU", v1.Time{}.OpenAPIModelName()},
 	}
 }
 

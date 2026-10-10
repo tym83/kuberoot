@@ -24,6 +24,7 @@ import (
 
 	"github.com/tym83/kuberoot/pkg/apis/node"
 	"github.com/tym83/kuberoot/pkg/atomicfile"
+	"github.com/tym83/kuberoot/pkg/gpu"
 	"github.com/tym83/kuberoot/pkg/supervisor"
 )
 
@@ -180,6 +181,11 @@ func readOSStatus() node.OSConfigStatus {
 		BootTime:      metav1.NewTime(time.Now().Add(-time.Duration(info.Uptime) * time.Second).Truncate(time.Second)),
 		MemoryTotal:   int64(info.Totalram) * int64(info.Unit),
 		MemoryFree:    int64(info.Freeram) * int64(info.Unit),
+	}
+	if gpus, err := gpu.Find(); err == nil {
+		for _, g := range gpus {
+			st.GPUs = append(st.GPUs, node.NodeGPU{Index: int32(g.Minor), Model: g.Model, UUID: g.UUID, BusID: g.BusID})
+		}
 	}
 	ifaces, _ := net.Interfaces()
 	for _, iface := range ifaces {
