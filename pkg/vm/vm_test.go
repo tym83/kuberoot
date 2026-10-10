@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -86,6 +87,18 @@ func TestStatusReceiveFailed(t *testing.T) {
 	s.Receive = ""
 	if st := m.Status("demo", s); st.Phase != "Starting" {
 		t.Fatalf("an ordinary start reported %+v", st)
+	}
+}
+
+func TestVolumeLeavesTheNodeRoom(t *testing.T) {
+	StateDir, RunDir = t.TempDir(), t.TempDir()
+	v := &Volumes{Node: "n", Address: "10.0.0.1"}
+	err := v.Apply(context.Background(), "huge", node.VolumeSpec{SizeBytes: 1 << 60, Minor: 100, Port: 7800})
+	if err == nil || !strings.Contains(err.Error(), "no room for the volume") {
+		t.Fatalf("a volume larger than the disk was made: %v", err)
+	}
+	if _, err := os.Stat(v.imageFile("huge")); err == nil {
+		t.Fatal("its file was left")
 	}
 }
 
