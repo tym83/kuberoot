@@ -17,6 +17,12 @@ spec:
   - name: drbd
     params: usermode_helper=disabled
   - name: drbd_transport_tcp
+  # The NVIDIA driver: the GPU, the memory CUDA uses, and what links against
+  # the display side. On a node with no NVIDIA GPU they do not load, and the
+  # node goes on without them.
+  - name: nvidia
+  - name: nvidia_uvm
+  - name: nvidia_modeset
   sysctls:
     net.ipv4.ip_forward: "1"
     net.ipv6.conf.all.forwarding: "1"
