@@ -26,9 +26,19 @@ type Node struct {
 	GPUs int
 }
 
-// Server is a model server as a node reports it.
+// Server is a model server as a node reports it: the version it runs, or
+// is asked to run while it is not running it yet.
 type Server struct {
-	Node, SHA256, Phase string
+	Node, Version, Phase string
+}
+
+// Version names a version of a model: its weights' SHA-256, and its
+// engine's after a + when it has one of its own.
+func Version(s v1.Source) string {
+	if s.Engine != nil {
+		return s.SHA256 + "+" + s.Engine.SHA256
+	}
+	return s.SHA256
 }
 
 var (
@@ -96,6 +106,7 @@ func Rollout(m v1.Model, replicas []string, servers map[string]Server, probe int
 	st := m.Status
 	st.Replicas = nil
 	target := m.Spec.Source
+	tv := Version(target)
 	want := map[string]string{}
 	all := func(sha string) {
 		for _, r := range replicas {
@@ -104,31 +115,31 @@ func Rollout(m v1.Model, replicas []string, servers map[string]Server, probe int
 	}
 	readyOn := func(node, sha string) bool {
 		s, ok := servers[node]
-		return ok && s.SHA256 == sha && s.Phase == "Ready"
+		return ok && s.Version == sha && s.Phase == "Ready"
 	}
-	if st.FailedSHA256 != "" && st.FailedSHA256 != target.SHA256 {
-		st.FailedSHA256 = ""
+	if st.FailedVersion != "" && st.FailedVersion != tv {
+		st.FailedVersion = ""
 	}
 	switch {
 	case st.Current == nil:
-		all(target.SHA256)
+		all(tv)
 		st.Phase, st.Message = "Deploying", ""
-		if countReady(replicas, target.SHA256, readyOn) == len(replicas) && len(replicas) == int(m.Spec.Replicas) {
+		if countReady(replicas, tv, readyOn) == len(replicas) && len(replicas) == int(m.Spec.Replicas) {
 			cur := target
 			st.Current, st.Phase = &cur, "Ready"
 		}
-	case target.SHA256 == st.Current.SHA256 || target.SHA256 == st.FailedSHA256:
-		all(st.Current.SHA256)
+	case tv == Version(*st.Current) || tv == st.FailedVersion:
+		all(Version(*st.Current))
 		st.Canary, st.RolloutStartedAt = "", nil
 		st.Phase, st.Message = "Ready", ""
-		if target.SHA256 == st.FailedSHA256 {
+		if tv == st.FailedVersion {
 			st.Phase = "RolledBack"
 			st.Message = "the new version did not answer on its first node; the version before serves"
-		} else if countReady(replicas, st.Current.SHA256, readyOn) < int(m.Spec.Replicas) {
+		} else if countReady(replicas, Version(*st.Current), readyOn) < int(m.Spec.Replicas) {
 			st.Phase = "Degraded"
 		}
 	default:
-		cur := st.Current.SHA256
+		cur := Version(*st.Current)
 		if !slices.Contains(replicas, st.Canary) {
 			st.Canary = replicas[0]
 		}
@@ -138,12 +149,12 @@ func Rollout(m v1.Model, replicas []string, servers map[string]Server, probe int
 		}
 		fail := func(why string) {
 			all(cur)
-			st.FailedSHA256, st.Canary, st.RolloutStartedAt = target.SHA256, "", nil
+			st.FailedVersion, st.Canary, st.RolloutStartedAt = tv, "", nil
 			st.Phase, st.Message = "RolledBack", why
 		}
-		canaryReady := readyOn(st.Canary, target.SHA256)
+		canaryReady := readyOn(st.Canary, tv)
 		switch {
-		case servers[st.Canary].SHA256 == target.SHA256 && servers[st.Canary].Phase == "Failed":
+		case servers[st.Canary].Version == tv && servers[st.Canary].Phase == "Failed":
 			fail("the new version failed on " + st.Canary)
 		case !canaryReady && now.Sub(st.RolloutStartedAt.Time) > RolloutTimeout:
 			fail("the new version was not ready on " + st.Canary + " in " + RolloutTimeout.String())
@@ -151,7 +162,7 @@ func Rollout(m v1.Model, replicas []string, servers map[string]Server, probe int
 			fail("the new version did not answer on " + st.Canary)
 		default:
 			all(cur)
-			want[st.Canary] = target.SHA256
+			want[st.Canary] = tv
 			st.Phase, st.Message = "RollingOut", "trying the new version on "+st.Canary
 			if canaryReady && probe > 0 {
 				// The others follow one at a time, each once the ones
@@ -161,17 +172,17 @@ func Rollout(m v1.Model, replicas []string, servers map[string]Server, probe int
 					if r == st.Canary {
 						continue
 					}
-					if s := servers[r]; s.SHA256 == target.SHA256 {
-						want[r] = target.SHA256
-						if !readyOn(r, target.SHA256) {
+					if s := servers[r]; s.Version == tv {
+						want[r] = tv
+						if !readyOn(r, tv) {
 							break
 						}
 						continue
 					}
-					want[r] = target.SHA256
+					want[r] = tv
 					break
 				}
-				if countReady(replicas, target.SHA256, readyOn) == len(replicas) && len(replicas) == int(m.Spec.Replicas) {
+				if countReady(replicas, tv, readyOn) == len(replicas) && len(replicas) == int(m.Spec.Replicas) {
 					prev, next := *st.Current, target
 					st.Previous, st.Current = &prev, &next
 					st.Canary, st.RolloutStartedAt = "", nil

@@ -37,8 +37,6 @@ var (
 	RunDir   = "/run/kuberoot/models"
 	LogDir   = "/var/log/kuberoot/models"
 	Binary   = "/usr/bin/llama-server"
-	// CUDABinary serves models on NVIDIA GPUs.
-	CUDABinary = "/usr/bin/llama-server-cuda"
 	// CgroupDir holds the servers' memory: all of the node's but Reserve,
 	// so that a server asking for more is stopped, and not the node.
 	CgroupDir = "/sys/fs/cgroup/kuberoot-models"
@@ -64,6 +62,9 @@ func (s *Servers) LogFile(n string) string { return filepath.Join(LogDir, n+".lo
 // Blob is where weights with this hash are kept.
 func Blob(sha string) string { return filepath.Join(BlobDir, sha+".gguf") }
 
+// EngineBlob is where an engine with this hash is kept.
+func EngineBlob(sha string) string { return filepath.Join(BlobDir, sha+".engine") }
+
 // Save keeps a server's spec; Apply then makes the node match it. The
 // weights it served before are remembered, and kept, for a rollback to find
 // them still on the node.
@@ -71,8 +72,8 @@ func (s *Servers) Save(name string, spec node.ModelServerSpec) error {
 	if err := os.MkdirAll(StateDir, 0o700); err != nil {
 		return err
 	}
-	if old, err := s.Load(name); err == nil && old.SHA256 != spec.SHA256 {
-		if err := os.WriteFile(s.specFile(name)+".previous", []byte(old.SHA256), 0o600); err != nil {
+	if old, err := s.Load(name); err == nil && (old.SHA256 != spec.SHA256 || old.EngineSHA256 != spec.EngineSHA256) {
+		if err := os.WriteFile(s.specFile(name)+".previous", []byte(old.SHA256+" "+old.EngineSHA256), 0o600); err != nil {
 			return err
 		}
 	}
@@ -122,10 +123,10 @@ func Args(spec node.ModelServerSpec) []string {
 	return args
 }
 
-// binary serves the spec: on its GPUs, or on the CPUs.
+// binary serves the spec: its engine, or the llama-server of the image.
 func binary(spec node.ModelServerSpec) string {
-	if spec.GPUs > 0 {
-		return CUDABinary
+	if spec.EngineSHA256 != "" {
+		return EngineBlob(spec.EngineSHA256)
 	}
 	return Binary
 }
@@ -216,8 +217,19 @@ func (s *Servers) assignGPUs(name string, spec node.ModelServerSpec) ([]int32, e
 // Apply downloads the weights the server needs, and runs the server with
 // them; a server running with other weights or settings is restarted.
 func (s *Servers) Apply(ctx context.Context, name string, spec node.ModelServerSpec) error {
-	if err := s.fetch(ctx, spec.URL, spec.SHA256); err != nil {
+	if spec.GPUs > 0 && spec.EngineSHA256 == "" {
+		return fmt.Errorf("a model on GPUs needs an engine built for CUDA")
+	}
+	if err := s.fetch(ctx, spec.URL, spec.SHA256, Blob(spec.SHA256)); err != nil {
 		return err
+	}
+	if spec.EngineSHA256 != "" {
+		if err := s.fetch(ctx, spec.EngineURL, spec.EngineSHA256, EngineBlob(spec.EngineSHA256)); err != nil {
+			return fmt.Errorf("engine: %w", err)
+		}
+		if err := os.Chmod(EngineBlob(spec.EngineSHA256), 0o755); err != nil {
+			return err
+		}
 	}
 	gpus, err := s.assignGPUs(name, spec)
 	if err != nil {
@@ -355,7 +367,7 @@ func (s *Servers) pid(name string) int {
 		return 0
 	}
 	cmdline, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
-	if err != nil || !strings.Contains(string(cmdline), Binary) {
+	if err != nil || !strings.Contains(string(cmdline), "--alias") {
 		return 0
 	}
 	if stat, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid)); err == nil && strings.Contains(string(stat), ") Z ") {
@@ -366,17 +378,17 @@ func (s *Servers) pid(name string) int {
 
 // fetch downloads weights once, into a file named by their hash; a
 // download that does not match the hash is thrown away.
-func (s *Servers) fetch(ctx context.Context, url, sha string) error {
+func (s *Servers) fetch(ctx context.Context, url, sha, dest string) error {
 	if len(sha) != 64 {
 		return fmt.Errorf("sha256 %q: 64 hex digits", sha)
 	}
-	if _, err := os.Stat(Blob(sha)); err == nil {
+	if _, err := os.Stat(dest); err == nil {
 		return nil
 	}
 	if err := os.MkdirAll(BlobDir, 0o700); err != nil {
 		return err
 	}
-	part := Blob(sha) + ".part"
+	part := dest + ".part"
 	f, err := os.Create(part)
 	if err != nil {
 		return err
@@ -407,7 +419,7 @@ func (s *Servers) fetch(ctx context.Context, url, sha string) error {
 	if err := f.Sync(); err != nil {
 		return err
 	}
-	return os.Rename(part, Blob(sha))
+	return os.Rename(part, dest)
 }
 
 type counter struct {
@@ -477,11 +489,14 @@ func (s *Servers) Status(name string, spec node.ModelServerSpec) node.ModelServe
 		}
 	}
 	st.GPUIndexes = s.GPUsOf(name)
+	if f := strings.Fields(s.startedWith(name)); len(f) > 0 && strings.HasSuffix(f[0], ".engine") {
+		st.EngineSHA256 = strings.TrimSuffix(filepath.Base(f[0]), ".engine")
+	}
 	if info, err := os.Stat(fmt.Sprintf("/proc/%d", pid)); err == nil {
 		t := metav1.NewTime(info.ModTime())
 		st.StartedAt = &t
 	}
-	if ok, _ := healthy(spec.Port); ok && st.SHA256 == spec.SHA256 {
+	if ok, _ := healthy(spec.Port); ok && st.SHA256 == spec.SHA256 && st.EngineSHA256 == spec.EngineSHA256 {
 		st.Phase = "Ready"
 	}
 	return st
@@ -502,22 +517,29 @@ func (s *Servers) Delete(name string) error {
 	return s.Prune()
 }
 
-// Prune removes weights that no server runs or ran last.
+// Prune removes weights and engines that no server runs or ran last.
 func (s *Servers) Prune() error {
 	keep := map[string]bool{}
 	for _, n := range s.Names() {
 		if spec, err := s.Load(n); err == nil {
-			keep[spec.SHA256] = true
+			keep[Blob(spec.SHA256)] = true
+			if spec.EngineSHA256 != "" {
+				keep[EngineBlob(spec.EngineSHA256)] = true
+			}
 		}
-		if prev, err := os.ReadFile(s.specFile(n) + ".previous"); err == nil {
-			keep[strings.TrimSpace(string(prev))] = true
+		if raw, err := os.ReadFile(s.specFile(n) + ".previous"); err == nil {
+			for _, f := range strings.Fields(string(raw)) {
+				keep[Blob(f)], keep[EngineBlob(f)] = true, true
+			}
 		}
 	}
-	blobs, _ := filepath.Glob(filepath.Join(BlobDir, "*.gguf"))
-	for _, b := range blobs {
-		if !keep[strings.TrimSuffix(filepath.Base(b), ".gguf")] {
-			if err := os.Remove(b); err != nil {
-				return err
+	for _, pattern := range []string{"*.gguf", "*.engine"} {
+		blobs, _ := filepath.Glob(filepath.Join(BlobDir, pattern))
+		for _, b := range blobs {
+			if !keep[b] {
+				if err := os.Remove(b); err != nil {
+					return err
+				}
 			}
 		}
 	}

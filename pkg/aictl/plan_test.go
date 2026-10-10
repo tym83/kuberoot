@@ -25,7 +25,7 @@ func model(replicas int32, sha string, current string) v1.Model {
 func ready(sha string, nodes ...string) map[string]Server {
 	out := map[string]Server{}
 	for _, n := range nodes {
-		out[n] = Server{Node: n, SHA256: sha, Phase: "Ready"}
+		out[n] = Server{Node: n, Version: sha, Phase: "Ready"}
 	}
 	return out
 }
@@ -68,7 +68,7 @@ func TestCanaryThenOneAtATime(t *testing.T) {
 	}
 	m.Status = st
 	servers := ready(shaA, "b", "c")
-	servers["a"] = Server{Node: "a", SHA256: shaB, Phase: "Ready"}
+	servers["a"] = Server{Node: "a", Version: shaB, Phase: "Ready"}
 	// Ready, not tried yet: the others wait.
 	if want, _ := Rollout(m, nodes, servers, 0, now); want["b"] != shaA {
 		t.Fatalf("moved on before the trial request: %v", want)
@@ -78,7 +78,7 @@ func TestCanaryThenOneAtATime(t *testing.T) {
 	if want["b"] != shaB || want["c"] != shaA {
 		t.Fatalf("after the trial: %v", want)
 	}
-	servers["b"] = Server{Node: "b", SHA256: shaB, Phase: "Loading"}
+	servers["b"] = Server{Node: "b", Version: shaB, Phase: "Loading"}
 	if want, _ := Rollout(m, nodes, servers, 1, now); want["c"] != shaA {
 		t.Fatalf("c moved while b still loads: %v", want)
 	}
@@ -95,9 +95,9 @@ func TestRollback(t *testing.T) {
 	m := model(2, shaB, shaA)
 	_, m.Status = Rollout(m, nodes, ready(shaA, nodes...), 0, now)
 	servers := ready(shaA, "b")
-	servers["a"] = Server{Node: "a", SHA256: shaB, Phase: "Ready"}
+	servers["a"] = Server{Node: "a", Version: shaB, Phase: "Ready"}
 	want, st := Rollout(m, nodes, servers, -ProbeFailures, now)
-	if want["a"] != shaA || st.FailedSHA256 != shaB || st.Phase != "RolledBack" {
+	if want["a"] != shaA || st.FailedVersion != shaB || st.Phase != "RolledBack" {
 		t.Fatalf("unanswered version kept: want %v status %+v", want, st)
 	}
 	// Not tried again while the spec names it.
@@ -108,14 +108,14 @@ func TestRollback(t *testing.T) {
 	// Failed on the node, or too slow: rolled back too.
 	m = model(2, shaB, shaA)
 	_, m.Status = Rollout(m, nodes, ready(shaA, nodes...), 0, now)
-	servers["a"] = Server{Node: "a", SHA256: shaB, Phase: "Failed"}
-	if _, st := Rollout(m, nodes, servers, 0, now); st.FailedSHA256 != shaB {
+	servers["a"] = Server{Node: "a", Version: shaB, Phase: "Failed"}
+	if _, st := Rollout(m, nodes, servers, 0, now); st.FailedVersion != shaB {
 		t.Fatalf("a failed server kept: %+v", st)
 	}
-	servers["a"] = Server{Node: "a", SHA256: shaB, Phase: "Downloading"}
+	servers["a"] = Server{Node: "a", Version: shaB, Phase: "Downloading"}
 	started := metav1.NewTime(now.Add(-RolloutTimeout - time.Minute))
 	m.Status.RolloutStartedAt = &started
-	if _, st := Rollout(m, nodes, servers, 0, now); st.FailedSHA256 != shaB {
+	if _, st := Rollout(m, nodes, servers, 0, now); st.FailedVersion != shaB {
 		t.Fatalf("a slow version kept: %+v", st)
 	}
 }
@@ -140,5 +140,17 @@ func TestPlaceCountsGPUs(t *testing.T) {
 	}
 	if got := Place(m, nodes, nil, map[string]int{"g4": 3}, time.Now()); len(got) != 0 {
 		t.Fatalf("got %v: g4 has one GPU free", got)
+	}
+}
+
+func TestEngineChangeIsANewVersion(t *testing.T) {
+	now := time.Now()
+	nodes := []string{"a", "b"}
+	m := model(2, shaA, shaA)
+	m.Spec.Source.Engine = &v1.Engine{URL: "http://x/engine", SHA256: shaB}
+	want, st := Rollout(m, nodes, ready(shaA, nodes...), 0, now)
+	v := Version(m.Spec.Source)
+	if st.Phase != "RollingOut" || want[st.Canary] != v || v != shaA+"+"+shaB {
+		t.Fatalf("a new engine went everywhere at once, or not at all: %v %+v", want, st)
 	}
 }

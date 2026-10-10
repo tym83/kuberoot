@@ -132,11 +132,17 @@ func (c *Controller) servers(ctx context.Context) (map[string]map[string]Server,
 			continue
 		}
 		s := Server{Node: node}
-		s.SHA256, _, _ = unstructured.NestedString(u.Object, "status", "sha256")
 		s.Phase, _, _ = unstructured.NestedString(u.Object, "status", "phase")
-		if s.Phase == "Downloading" || s.Phase == "Failed" || s.SHA256 == "" {
+		weights, _, _ := unstructured.NestedString(u.Object, "status", "sha256")
+		engine, _, _ := unstructured.NestedString(u.Object, "status", "engineSHA256")
+		if s.Phase == "Downloading" || s.Phase == "Failed" || weights == "" {
 			// Not running the version asked for yet: report the one asked for.
-			s.SHA256, _, _ = unstructured.NestedString(u.Object, "spec", "sha256")
+			weights, _, _ = unstructured.NestedString(u.Object, "spec", "sha256")
+			engine, _, _ = unstructured.NestedString(u.Object, "spec", "engineSHA256")
+		}
+		s.Version = Version(v1.Source{SHA256: weights})
+		if engine != "" {
+			s.Version = Version(v1.Source{SHA256: weights, Engine: &v1.Engine{SHA256: engine}})
 		}
 		if out[model] == nil {
 			out[model] = map[string]Server{}
@@ -223,7 +229,7 @@ func (c *Controller) reconcile(ctx context.Context) {
 		for node, s := range mine {
 			sha, stays := want[node]
 			backend := fmt.Sprintf("%s:%d", byName[node].Address, port)
-			if stays && sha == s.SHA256 {
+			if stays && sha == s.Version {
 				c.drained(node + "." + m.Name)
 				if s.Phase == "Ready" && byName[node].Ready {
 					backends = append(backends, backend)
@@ -243,7 +249,7 @@ func (c *Controller) reconcile(ctx context.Context) {
 		ready := 0
 		for _, r := range replicas {
 			s := mine[r]
-			st.Replicas = append(st.Replicas, v1.Replica{Node: r, Address: byName[r].Address, SHA256: s.SHA256, Phase: s.Phase})
+			st.Replicas = append(st.Replicas, v1.Replica{Node: r, Address: byName[r].Address, Version: s.Version, Phase: s.Phase})
 			if s.Phase == "Ready" && byName[r].Ready {
 				ready++
 			}
@@ -263,7 +269,7 @@ func (c *Controller) reconcile(ctx context.Context) {
 // probeResult tries a new version on its first node once it is ready
 // there, and remembers the answer for the version.
 func (c *Controller) probeResult(ctx context.Context, m *v1.Model, mine map[string]Server, byName map[string]Node, port int32) int {
-	sha := m.Spec.Source.SHA256
+	sha := Version(m.Spec.Source)
 	key := m.Name + "/" + sha
 	c.mu.Lock()
 	if c.probes == nil {
@@ -273,7 +279,7 @@ func (c *Controller) probeResult(ctx context.Context, m *v1.Model, mine map[stri
 	c.mu.Unlock()
 	canary := m.Status.Canary
 	s, ok := mine[canary]
-	if n > 0 || m.Status.Current == nil || sha == m.Status.Current.SHA256 || !ok || s.SHA256 != sha || s.Phase != "Ready" {
+	if n > 0 || m.Status.Current == nil || sha == Version(*m.Status.Current) || !ok || s.Version != sha || s.Phase != "Ready" {
 		return n
 	}
 	pctx, cancel := context.WithTimeout(ctx, time.Minute)
@@ -351,18 +357,22 @@ func probe(ctx context.Context, address string, port int32, model string) error 
 // apply makes each replica node run the version decided for it, and no
 // other node run the model.
 func (c *Controller) apply(ctx context.Context, m *v1.Model, want map[string]string, port int32, byName map[string]Node, mine map[string]Server, hold map[string]bool) {
-	urls := map[string]string{m.Spec.Source.SHA256: m.Spec.Source.URL}
-	for _, s := range []*v1.Source{m.Status.Current, m.Status.Previous} {
-		if s != nil {
-			urls[s.SHA256] = s.URL
+	sources := map[string]v1.Source{Version(m.Spec.Source): m.Spec.Source}
+	for _, src := range []*v1.Source{m.Status.Current, m.Status.Previous} {
+		if src != nil {
+			sources[Version(*src)] = *src
 		}
 	}
-	for node, sha := range want {
+	for node, version := range want {
 		if !byName[node].Ready || hold[node] {
 			continue
 		}
-		spec := nodev1.ModelServerSpec{URL: urls[sha], SHA256: sha, Model: m.Name, Port: port,
+		src := sources[version]
+		spec := nodev1.ModelServerSpec{URL: src.URL, SHA256: src.SHA256, Model: m.Name, Port: port,
 			ContextSize: m.Spec.ContextSize, Parallel: m.Spec.Parallel, Threads: m.Spec.Threads, GPUs: m.Spec.GPUs}
+		if src.Engine != nil {
+			spec.EngineURL, spec.EngineSHA256 = src.Engine.URL, src.Engine.SHA256
+		}
 		if err := c.ensure(ctx, node+"."+m.Name, spec); err != nil {
 			klog.Errorf("%s on %s: %v", m.Name, node, err)
 		}

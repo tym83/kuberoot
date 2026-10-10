@@ -1770,9 +1770,22 @@ func schema_pkg_apis_node_v1alpha1_ModelServerSpec(ref common.ReferenceCallback)
 					},
 					"gpus": {
 						SchemaProps: spec.SchemaProps{
-							Description: "GPUs: NVIDIA GPUs of the node the server runs the model on, all of its layers; none runs it on the CPUs.",
+							Description: "GPUs: NVIDIA GPUs of the node the server runs the model on, all of its layers; none runs it on the CPUs. A server on GPUs needs an engine built for CUDA.",
 							Type:        []string{"integer"},
 							Format:      "int32",
+						},
+					},
+					"engineURL": {
+						SchemaProps: spec.SchemaProps{
+							Description: "EngineURL and EngineSHA256 name the program that serves the model in place of the llama-server built into the image, fetched like the weights and used only when it matches its hash.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"engineSHA256": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 				},
@@ -1810,6 +1823,13 @@ func schema_pkg_apis_node_v1alpha1_ModelServerStatus(ref common.ReferenceCallbac
 					"sha256": {
 						SchemaProps: spec.SchemaProps{
 							Description: "SHA256 of the weights the running server has loaded.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"engineSHA256": {
+						SchemaProps: spec.SchemaProps{
+							Description: "EngineSHA256 of the program the running server is, when not the built-in one.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
