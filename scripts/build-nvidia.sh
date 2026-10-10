@@ -59,9 +59,12 @@ done
 
 # The CDI hook: containers given the driver's libraries need their loader's
 # cache refreshed to find them; the device plugin's CDI descriptions call it.
-GOBIN="$tree/usr/bin" CGO_ENABLED=0 GOARCH=$ARCH GOFLAGS=-mod=mod \
-  go install "github.com/NVIDIA/nvidia-container-toolkit/cmd/nvidia-cdi-hook@$NVIDIA_CONTAINER_TOOLKIT_VERSION"
-[ -x "$tree/usr/bin/nvidia-cdi-hook" ] || mv "$tree"/usr/bin/linux_*/nvidia-cdi-hook "$tree/usr/bin/"
+# It links NVML's loader with cgo, so it is built for the builder's own
+# architecture, against the glibc the image carries.
+if [ "$ARCH" = amd64 ]; then
+  GOBIN="$tree/usr/bin" CGO_ENABLED=1 GOFLAGS=-mod=mod \
+    go install "github.com/NVIDIA/nvidia-container-toolkit/cmd/nvidia-cdi-hook@$NVIDIA_CONTAINER_TOOLKIT_VERSION" 2>/dev/null
+fi
 
 # nvidia drives the GPU, nvidia-uvm is the memory CUDA needs, nvidia-modeset
 # what the display side links against. nvidia-drm and peermem stay out: no
