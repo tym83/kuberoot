@@ -54,6 +54,8 @@ if [ ! -x "$cuda/bin/nvcc" ]; then
   rm -rf "$cuda"
   mv "$cuda.part" "$cuda"
 fi
+# nvcc looks for its libraries in lib64; the archives put them in lib.
+[ -e "$cuda/lib64" ] || ln -s lib "$cuda/lib64"
 command -v cmake >/dev/null || { apt-get -qq update && apt-get -qq install -y cmake >/dev/null; }
 
 src="$WORK/src/llama.cpp-$LLAMA_CPP_VERSION"
