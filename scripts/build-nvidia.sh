@@ -57,6 +57,12 @@ for f in "$tree/usr/bin/nvidia-smi" "$tree$libdir"/*.so.$V; do
   done
 done
 
+# The CDI hook: containers given the driver's libraries need their loader's
+# cache refreshed to find them; the device plugin's CDI descriptions call it.
+GOBIN="$tree/usr/bin" CGO_ENABLED=0 GOARCH=$ARCH GOFLAGS=-mod=mod \
+  go install "github.com/NVIDIA/nvidia-container-toolkit/cmd/nvidia-cdi-hook@$NVIDIA_CONTAINER_TOOLKIT_VERSION"
+[ -x "$tree/usr/bin/nvidia-cdi-hook" ] || mv "$tree"/usr/bin/linux_*/nvidia-cdi-hook "$tree/usr/bin/"
+
 # nvidia drives the GPU, nvidia-uvm is the memory CUDA needs, nvidia-modeset
 # what the display side links against. nvidia-drm and peermem stay out: no
 # display, no RDMA.

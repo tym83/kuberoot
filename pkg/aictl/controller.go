@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
@@ -158,6 +159,7 @@ func (c *Controller) reconcile(ctx context.Context) {
 		klog.Errorf("nodes: %v", err)
 		return
 	}
+	c.labelGPUNodes(ctx, nodes)
 	list, err := c.Dynamic.Resource(modelsGVR).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		klog.Errorf("models: %v", err)
@@ -497,5 +499,37 @@ func (c *Controller) writeStatus(ctx context.Context, m *v1.Model, st v1.ModelSt
 	u.Object["status"] = raw
 	if _, err := c.Dynamic.Resource(modelsGVR).UpdateStatus(ctx, u, metav1.UpdateOptions{}); err != nil {
 		klog.V(2).Infof("status of %s: %v", m.Name, err)
+	}
+}
+
+// GPULabel marks the nodes with NVIDIA GPUs, where GPU packages (device
+// plugin, metrics, sharing) run their pods.
+const GPULabel = "nvidia.com/gpu.present"
+
+// labelGPUNodes keeps GPULabel on the nodes that report GPUs, and off the
+// others.
+func (c *Controller) labelGPUNodes(ctx context.Context, nodes []Node) {
+	list, err := c.Kube.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return
+	}
+	gpus := map[string]int{}
+	for _, n := range nodes {
+		gpus[n.Name] = n.GPUs
+	}
+	for _, n := range list.Items {
+		_, has := n.Labels[GPULabel]
+		var patch string
+		switch {
+		case gpus[n.Name] > 0 && !has:
+			patch = `{"metadata":{"labels":{"` + GPULabel + `":"true"}}}`
+		case gpus[n.Name] == 0 && has:
+			patch = `{"metadata":{"labels":{"` + GPULabel + `":null}}}`
+		default:
+			continue
+		}
+		if _, err := c.Kube.CoreV1().Nodes().Patch(ctx, n.Name, types.MergePatchType, []byte(patch), metav1.PatchOptions{}); err != nil {
+			klog.Errorf("label of %s: %v", n.Name, err)
+		}
 	}
 }

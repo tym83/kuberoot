@@ -78,7 +78,7 @@ func TestCDI(t *testing.T) {
 	}
 	s := string(raw)
 	for _, want := range []string{"kind: nvidia.com/gpu", "name: \"0\"", "name: GPU-bbbb", "name: all",
-		"path: " + Dev + "/nvidiactl", "path: " + Dev + "/nvidia-uvm", "hostPath: " + LibDir + "/libcuda.so.1"} {
+		"path: " + Dev + "/nvidiactl", "path: " + Dev + "/nvidia-uvm", "hostPath: " + LibDir + "/libcuda.so.1", "update-ldcache"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("spec lacks %q:\n%s", want, s)
 		}

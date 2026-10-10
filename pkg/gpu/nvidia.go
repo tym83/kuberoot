@@ -27,6 +27,8 @@ var (
 	CDIFile = "/var/run/cdi/nvidia.yaml"
 	// LibDir holds the driver's libraries, on the node and in containers.
 	LibDir = "/lib/x86_64-linux-gnu"
+	// CDIHook refreshes a container's loader cache for the libraries given.
+	CDIHook = "/usr/bin/nvidia-cdi-hook"
 )
 
 // GPU is one GPU as the driver reports it.
@@ -206,6 +208,9 @@ func CDI(gpus []GPU, devices []string) ([]byte, error) {
 		"containerEdits": map[string]any{
 			"deviceNodes": common,
 			"mounts":      mounts,
+			// The image's loader cache knows nothing of the libraries given.
+			"hooks": []map[string]any{{"hookName": "createContainer", "path": CDIHook,
+				"args": []string{"nvidia-cdi-hook", "update-ldcache", "--folder", LibDir}}},
 		},
 	}
 	return yaml.Marshal(spec)
