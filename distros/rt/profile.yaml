@@ -86,6 +86,10 @@ spec:
         - sqlite:///var/lib/kine/state.db?_journal=WAL&_synchronous=FULL&cache=shared&_busy_timeout=30000&_txlock=immediate
         - --listen-address
         - unix:///run/kine/kine.sock
+        # The API server compacts the history every five minutes, as with etcd;
+        # kine's own floor of 1000 revisions kept a quiet cluster's old
+        # versions for hours, so list continuations never expired.
+        - --compact-min-retain=100
       - name: kube-apiserver
         args:
         - /usr/bin/kube-apiserver
