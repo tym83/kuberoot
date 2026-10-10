@@ -70,7 +70,7 @@ spec:
                 anyOf:
                 - type: integer
                 - type: string
-                default: 8Gi
+                default: 6Gi
                 description: |-
                   Disk of the desktop, the person's files on it, kept on as many nodes
                   as Replicas.

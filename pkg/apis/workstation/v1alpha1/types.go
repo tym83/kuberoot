@@ -61,7 +61,7 @@ type WorkspaceSpec struct {
 	Memory resource.Quantity `json:"memory,omitempty"`
 	// Disk of the desktop, the person's files on it, kept on as many nodes
 	// as Replicas.
-	// +kubebuilder:default="8Gi"
+	// +kubebuilder:default="6Gi"
 	Disk resource.Quantity `json:"disk,omitempty"`
 	// +kubebuilder:default=3
 	// +kubebuilder:validation:Enum=1;3

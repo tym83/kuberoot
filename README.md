@@ -204,7 +204,7 @@ spec:
   owner: anna
   cpus: 2
   memory: 2Gi
-  disk: 8Gi
+  disk: 6Gi
 ```
 
 `kuberoot-wsctl`, on the control plane, makes the workspace a VirtualMachine from a cloud image (Ubuntu 24.04 unless `spec.image` names another). The image's cloud-init installs the desktop at the first boot: the owner's account, Xfce, a VNC server that keeps the session running between connections, and xrdp for RDP clients. The workspace is `Provisioning` until its desktop answers, then `Ready`. Its status gives the address to open it at in a browser (`status.url`) and the one for an RDP client (`status.rdp`). The Secret `status.credentials` names holds the workspace's token and the owner's password.

@@ -237,7 +237,7 @@ func machineSpec(w *v1.Workspace) vmv1.VirtualMachineSpec {
 		spec.Memory = resource.MustParse("2Gi")
 	}
 	if spec.Disk.Size.IsZero() {
-		spec.Disk.Size = resource.MustParse("8Gi")
+		spec.Disk.Size = resource.MustParse("6Gi")
 	}
 	if spec.Replicas == 0 {
 		spec.Replicas = 3
