@@ -49,6 +49,7 @@ spec:
     controlPlane:
       generators: [node, cluster, containers, kubelet]
       addons: true
+      packages: true
       services:
       - name: kuberoot-node
         args:
@@ -169,7 +170,28 @@ spec:
       - name: kuberoot-intents
         after: apiserver
         args: [/usr/bin/kuberoot-intents, '--kubeconfig={{kube "intents.kubeconfig"}}']
-
+      # The package manager of the distribution: cluster add-ons are kubepkg packages.
+      - name: kubepkg-operator
+        after: apiserver
+        env: [KUBECONFIG=/etc/kubernetes/admin.kubeconfig, HOME=/var/lib/kubepkg]
+        args:
+        - /usr/bin/kubepkg-operator
+        - --backend=helm
+        - --cache-dir=/var/lib/kubepkg/cache
+        # What kuberoot nodes are like, for packages that need to know.
+        - --values-secret=kube-system/kuberoot-platform-values
+        # Credentials for private registries, when this Secret exists
+        # (kubernetes.io/dockerconfigjson); without it, downloads go without.
+        - --registry-secret=kube-system/kuberoot-registry-credentials
+        # Pods in package namespaces run only the images their packages pin.
+        - --image-policy=enforce
+        - --webhook-namespace=kube-system
+        - --webhook-service=kubepkg-webhook
+        - --webhook-secret=kubepkg-webhook-tls
+        - --webhook-config=kubepkg-images
+        - --metrics-bind-address=0
+        - --health-probe-bind-address=0
+        - '{{if .Boot.RepoPlainHTTP}}--plain-http{{end}}'
     worker:
       generators: [node, member, containers, kubelet]
       services:
