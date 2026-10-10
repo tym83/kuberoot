@@ -4,7 +4,7 @@
 
 kuberoot builds Kubernetes distributions that boot straight on hardware. Each one is a single image with its own Linux kernel, a small init that brings up Kubernetes, and a node that is managed through the Kubernetes API itself: there is no SSH, no shell and no separate node tool, `kubectl` reaches the node. Everything above the base is a [kubepkg](https://github.com/tym83/kubepkg) package, so a distribution is a base plus a meta package, the way a Linux distribution is a kernel plus packages.
 
-The repository builds six distributions: `edge`, a general-purpose cluster for one to a few nodes; `router`, Kubernetes without containers that runs a network router; `hypervisor`, virtual machines on KVM with their disks replicated between nodes, moved off a node that fails; `ai`, language models served as processes of the nodes behind one OpenAI-compatible endpoint, with new versions rolled out and back by the cluster; `rt`, a real-time controller whose pods get whole CPUs with no timer tick on a fully preemptible kernel; and `iot`, a gateway with no containers that reads devices over Modbus and sends on what they say, its changes undone by themselves when they cut a device off.
+The repository builds seven distributions: `edge`, a general-purpose cluster for one to a few nodes; `router`, Kubernetes without containers that runs a network router; `hypervisor`, virtual machines on KVM with their disks replicated between nodes, moved off a node that fails; `ai`, language models served as processes of the nodes behind one OpenAI-compatible endpoint, with new versions rolled out and back by the cluster; `rt`, a real-time controller whose pods get whole CPUs with no timer tick on a fully preemptible kernel; `iot`, a gateway with no containers that reads devices over Modbus and sends on what they say, its changes undone by themselves when they cut a device off; and `observability`, a monitoring cluster outside what it watches, which reads servers' BMCs, switches, PDUs and probes of services natively and tells the outside world, by its heartbeats, that it still works.
 
 > Status: experimental. The `edge` distribution passes the Kubernetes conformance suite (462 of 462 on a three-node cluster, Kubernetes 1.37.1), but the API of the node and the layout of the state may still change.
 
@@ -191,6 +191,52 @@ A Device is read on its schedule over one Modbus TCP connection. Its status show
 Changes run on trial under a Safeguard (`kind: Safeguard`, named `default`). A change that makes a device that was answering go silent, or a broker that was taking messages unreachable, is undone at once: the node goes back to the last confirmed configuration, keeps it across reboots, and marks the resources it does not run `RolledBack` with the reason. A change that runs its trial healthy becomes final by itself, or only by `spec.confirm` with `autoConfirm: false`.
 
 Why without pods: a gateway does one job, close to the devices, often on small hardware and with nobody nearby. Here the protocol code, the configuration and the operating system are one image, upgraded together with A/B slots and rolled back together. The configuration is typed and checked when it is written. It goes through RBAC and audit, can be reviewed like code, and is undone by itself when it cuts a device off. On a test node the whole system took about 630 MiB, most of it the API server; `kuberoot-devices` took 35 MiB.
+
+## The observability distribution
+
+`observability` is a monitoring cluster that stands outside what it watches, so it still sees and alerts when that is down. It is edge, with pods and packages: VictoriaMetrics, VictoriaLogs, alerting and Perses dashboards come from the `kuberoot-observability` meta package. What it watches beyond software are `devices.kuberoot.dev` resources, read by `kuberoot-devices` on the control plane with no exporters to run:
+
+```yaml
+apiVersion: devices.kuberoot.dev/v1alpha1
+kind: Device
+metadata: {name: bmc-a3-01}
+spec:
+  protocol: redfish
+  address: https://10.0.9.11
+  every: 30s
+  tls: {insecureSkipVerify: true}
+  credentials: {name: bmc-rack-a3}     # a Secret in kube-system: username, password
+---
+apiVersion: devices.kuberoot.dev/v1alpha1
+kind: Device
+metadata: {name: pdu-a3}
+spec:
+  protocol: snmp
+  address: 10.0.9.20
+  snmp: {version: "3"}
+  credentials: {name: snmp-noc}        # username, authProtocol, authPassword, privProtocol, privPassword
+  points:
+  - {name: load, oid: 1.3.6.1.4.1.318.1.1.12.2.3.1.1.2.1, scale: "0.1", unit: A}
+---
+apiVersion: devices.kuberoot.dev/v1alpha1
+kind: Device
+metadata: {name: portal}
+spec: {protocol: http, address: "https://portal.example.org/healthz", every: 15s}
+---
+apiVersion: devices.kuberoot.dev/v1alpha1
+kind: Heartbeat
+metadata: {name: outside}
+spec:
+  url: https://hc.example.org/ping/0b6f...
+  every: 1m
+  query:
+    url: http://vmsingle-victoria-metrics.monitoring.svc:8428
+    expr: max(time() - timestamp(kuberoot_device_up)) < 120
+```
+
+A BMC reports what it has: the daemon walks its Redfish systems, chassis and managers and names the values after them, as `temperature_cpu1_temp_celsius`, `fan_..._rpm`, `power_..._watts`, `psu_..._health` (0 OK, 1 warning, 2 critical) and the entries of its logs. An SNMP device reads the OIDs its points name, over version 2c or 3. A probe (`http`, `tcp`, `icmp`) measures `up`, `latency_seconds` and the HTTP `status`. A service that is down is a reading too. Every value is a Prometheus metric, `kuberoot_device_value{device,point}` with `kuberoot_device_up`, on the node's port 9790, behind the Service `kube-system/kuberoot-devices` that the daemon keeps on the node's address. The meta package scrapes it, shows it in a Perses dashboard (dashboards and datasources are `PersesDashboard` and `PersesGlobalDatasource` resources), and alerts on devices that stop answering and on health that turns critical. Changes run on trial under a Safeguard, as on iot: one that breaks a target that worked is undone.
+
+The heartbeat is the dead man's switch: it calls a URL outside the cluster every period, and only while its query finds what it looks for, so a cluster that stopped collecting falls as silent as one that is down, and the outside service alerts. The meta package's `Watchdog` alert, always firing, serves the same end for the alerting chain when Alertmanager routes it to such a service.
 
 ## Node API
 

@@ -24,9 +24,12 @@ go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.22.0 object:headerFile
 go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.22.0 object:headerFile=$HEADER \
   paths=./pkg/apis/vm/... crd:crdVersions=v1 output:crd:dir=distros/hypervisor/addons
 
-# The devices API: deepcopy, and its CRDs as the iot distribution's add-ons.
+# The devices API: deepcopy, and its CRDs as add-ons of the iot and the
+# observability distributions, which both run kuberoot-devices.
 go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.22.0 object:headerFile=$HEADER \
   paths=./pkg/apis/devices/... crd:crdVersions=v1 output:crd:dir=distros/iot/addons
+mkdir -p distros/observability/addons
+cp distros/iot/addons/devices.kuberoot.dev_*.yaml distros/observability/addons/
 
 # The models API: deepcopy, and its CRD as the ai distribution's add-on.
 go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.22.0 object:headerFile=$HEADER \
