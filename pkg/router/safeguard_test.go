@@ -37,12 +37,12 @@ func TestSafeguardTrialConfirmAndRollback(t *testing.T) {
 		t.Fatalf("baseline: running %s, changed %v", rev, changed)
 	}
 	// A change runs on trial.
-	if _, rev, _ := tr.decide(bad, badRev, guard, now.Add(time.Minute)); rev != badRev || tr.pending != badRev {
-		t.Fatalf("trial: running %s, pending %s", rev, tr.pending)
+	if _, rev, _ := tr.decide(bad, badRev, guard, now.Add(time.Minute)); rev != badRev || tr.Pending != badRev {
+		t.Fatalf("trial: running %s, pending %s", rev, tr.Pending)
 	}
 	// Out of time: back to the confirmed one, and it stays back.
-	if c, rev, _ := tr.decide(bad, badRev, guard, now.Add(3*time.Minute+time.Second)); rev != goodRev || Revision(c) != goodRev || tr.rolledBack != badRev {
-		t.Fatalf("rollback: running %s, rolled back %s", rev, tr.rolledBack)
+	if c, rev, _ := tr.decide(bad, badRev, guard, now.Add(3*time.Minute+time.Second)); rev != goodRev || Revision(c) != goodRev || tr.RolledBack != badRev {
+		t.Fatalf("rollback: running %s, rolled back %s", rev, tr.RolledBack)
 	}
 	if _, rev, _ := tr.decide(bad, badRev, guard, now.Add(time.Hour)); rev != goodRev {
 		t.Fatalf("the undone revision came back: running %s", rev)
@@ -50,24 +50,24 @@ func TestSafeguardTrialConfirmAndRollback(t *testing.T) {
 	// Changing the resources again starts a new trial; confirming makes it final.
 	fixed := withRoute("192.168.0.0/16")
 	fixedRev := Revision(fixed)
-	if _, rev, _ := tr.decide(fixed, fixedRev, guard, now.Add(2*time.Hour)); rev != fixedRev || tr.pending != fixedRev {
-		t.Fatalf("new trial: running %s, pending %s", rev, tr.pending)
+	if _, rev, _ := tr.decide(fixed, fixedRev, guard, now.Add(2*time.Hour)); rev != fixedRev || tr.Pending != fixedRev {
+		t.Fatalf("new trial: running %s, pending %s", rev, tr.Pending)
 	}
 	guard.Spec.Confirm = fixedRev
 	_, rev, changed := tr.decide(fixed, fixedRev, guard, now.Add(2*time.Hour+time.Minute))
-	if rev != fixedRev || !changed || tr.confirmedRev != fixedRev || tr.pending != "" || tr.rolledBack != "" {
-		t.Fatalf("confirm: running %s, confirmed %s, pending %q", rev, tr.confirmedRev, tr.pending)
+	if rev != fixedRev || !changed || tr.ConfirmedRev != fixedRev || tr.Pending != "" || tr.RolledBack != "" {
+		t.Fatalf("confirm: running %s, confirmed %s, pending %q", rev, tr.ConfirmedRev, tr.Pending)
 	}
 
 	// The confirmed configuration survives a restart of the controller.
 	path := filepath.Join(t.TempDir(), "confirmed.json")
-	if err := tr.save(path); err != nil {
+	if err := tr.Save(path); err != nil {
 		t.Fatal(err)
 	}
 	var again trial
-	again.load(path)
-	if again.confirmedRev != fixedRev || Revision(again.confirmed) != fixedRev {
-		t.Errorf("after a restart: confirmed %s", again.confirmedRev)
+	again.Load(path)
+	if again.ConfirmedRev != fixedRev || Revision(again.Confirmed) != fixedRev {
+		t.Errorf("after a restart: confirmed %s", again.ConfirmedRev)
 	}
 }
 
@@ -75,8 +75,8 @@ func TestWithoutSafeguardEveryChangeIsFinal(t *testing.T) {
 	var tr trial
 	a, b := withRoute("10.0.0.0/8"), withRoute("10.1.0.0/16")
 	tr.decide(a, Revision(a), nil, time.Now())
-	if _, rev, changed := tr.decide(b, Revision(b), nil, time.Now()); rev != Revision(b) || !changed || tr.pending != "" {
-		t.Errorf("running %s, changed %v, pending %q", rev, changed, tr.pending)
+	if _, rev, changed := tr.decide(b, Revision(b), nil, time.Now()); rev != Revision(b) || !changed || tr.Pending != "" {
+		t.Errorf("running %s, changed %v, pending %q", rev, changed, tr.Pending)
 	}
 }
 
@@ -91,11 +91,11 @@ func TestRollbackSurvivesARestart(t *testing.T) {
 		t.Fatal("a rollback is not kept on disk")
 	}
 	path := filepath.Join(t.TempDir(), "confirmed.json")
-	if err := tr.save(path); err != nil {
+	if err := tr.Save(path); err != nil {
 		t.Fatal(err)
 	}
 	var again trial
-	again.load(path)
+	again.Load(path)
 	if _, rev, _ := again.decide(bad, Revision(bad), guard, now.Add(3*time.Minute)); rev != Revision(good) {
 		t.Errorf("after a restart the undone revision runs again: %s", rev)
 	}

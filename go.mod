@@ -7,7 +7,10 @@ require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/diskfs/go-diskfs v1.9.4
+	github.com/eclipse/paho.mqtt.golang v1.5.1
+	github.com/google/cel-go v0.29.2
 	github.com/insomniacslk/dhcp v0.0.0-20260901064844-234b97448fae
+	github.com/simonvetter/modbus v1.6.4
 	github.com/vishvananda/netlink v1.3.1
 	golang.org/x/sys v0.48.0
 	k8s.io/api v0.37.1
@@ -62,10 +65,11 @@ require (
 	github.com/go-openapi/swag/stringutils v0.27.1 // indirect
 	github.com/go-openapi/swag/typeutils v0.27.1 // indirect
 	github.com/go-openapi/swag/yamlutils v0.27.1 // indirect
+	github.com/goburrow/serial v0.1.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
-	github.com/google/cel-go v0.29.2 // indirect
 	github.com/google/gnostic-models v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
+	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
