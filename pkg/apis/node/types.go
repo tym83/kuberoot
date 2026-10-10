@@ -532,3 +532,62 @@ type ModelServerList struct {
 
 	Items []ModelServer `json:"items"`
 }
+
+// LatencyTest measures how late the node wakes a real-time task: cyclictest
+// runs a thread at a real-time priority on each CPU asked for, wakes it at a
+// fixed interval, and records how long after the due time it ran.
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +genclient:nonNamespaced
+type LatencyTest struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   LatencyTestSpec   `json:"spec,omitempty"`
+	Status LatencyTestStatus `json:"status,omitempty"`
+}
+
+type LatencyTestSpec struct {
+	// DurationSeconds the test runs; 60 when 0.
+	DurationSeconds int32 `json:"durationSeconds,omitempty"`
+	// CPUs to measure, as a list like 2-3; the CPUs kept for real-time work
+	// (those without a timer tick) when empty, or all CPUs if none is.
+	CPUs string `json:"cpus,omitempty"`
+	// Priority of the measuring threads, SCHED_FIFO; 95 when 0.
+	Priority int32 `json:"priority,omitempty"`
+	// IntervalMicroseconds between wake-ups; 1000 when 0.
+	IntervalMicroseconds int32 `json:"intervalMicroseconds,omitempty"`
+}
+
+type LatencyTestStatus struct {
+	// Phase: Pending, Running, Succeeded or Failed.
+	Phase      string       `json:"phase,omitempty"`
+	Message    string       `json:"message,omitempty"`
+	StartedAt  *metav1.Time `json:"startedAt,omitempty"`
+	FinishedAt *metav1.Time `json:"finishedAt,omitempty"`
+	// Kernel the test ran on, and whether it is fully preemptible.
+	Kernel string `json:"kernel,omitempty"`
+	// Results per CPU, then the worst of them: latencies in microseconds.
+	CPUs              []CPULatency `json:"cpus,omitempty"`
+	MaxMicroseconds   int64        `json:"maxMicroseconds,omitempty"`
+	P99Microseconds   int64        `json:"p99Microseconds,omitempty"`
+	P9999Microseconds int64        `json:"p9999Microseconds,omitempty"`
+}
+
+// CPULatency is what one CPU's measuring thread saw.
+type CPULatency struct {
+	CPU               int32 `json:"cpu"`
+	Samples           int64 `json:"samples"`
+	MinMicroseconds   int64 `json:"minMicroseconds"`
+	AvgMicroseconds   int64 `json:"avgMicroseconds"`
+	MaxMicroseconds   int64 `json:"maxMicroseconds"`
+	P99Microseconds   int64 `json:"p99Microseconds"`
+	P9999Microseconds int64 `json:"p9999Microseconds"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type LatencyTestList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []LatencyTest `json:"items"`
+}

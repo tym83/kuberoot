@@ -85,6 +85,10 @@ type Options struct {
 	ModelServers    bool
 	ModelReserveMiB int64
 
+	// LatencyTests: the node measures the latency it delivers to real-time
+	// tasks (latencytests resource).
+	LatencyTests bool
+
 	// RoutesKubeconfig reads the nodes to route pod subnets between them.
 	RoutesKubeconfig string
 }
@@ -146,6 +150,11 @@ func Run(ctx context.Context, o Options) error {
 		models = newModelHost(o.ModelReserveMiB << 20)
 		storages["modelservers"] = modelServerStorage{models}
 	}
+	var latency *latencyTests
+	if o.LatencyTests {
+		latency = newLatencyTests("/var/lib/kuberoot/latencytests")
+		storages["latencytests"] = latencyStorage{latency}
+	}
 	logs := &logStorage{kinit: kinit}
 	resources := map[string]rest.Storage{
 		"kubeconfigs": &kubeconfigStorage{files: o.Kubeconfig},
@@ -206,6 +215,9 @@ func Run(ctx context.Context, o Options) error {
 		return err
 	}
 	go assessBoot(ctx, kinit, o.NodeName)
+	if latency != nil {
+		go latency.run(ctx)
+	}
 	if models != nil {
 		go models.run(ctx)
 	}

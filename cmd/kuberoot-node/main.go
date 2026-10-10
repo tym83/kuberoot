@@ -42,6 +42,7 @@ func main() {
 	flag.StringVar(&o.VMNetworkKubeconfig, "vm-network-kubeconfig", "", "credentials to read nodes and join the machines' network to them")
 	flag.BoolVar(&o.ModelServers, "model-servers", false, "serve language models: the modelservers resource")
 	flag.Int64Var(&o.ModelReserveMiB, "model-reserve-mib", 1024, "memory, in MiB, the model servers leave to the node")
+	flag.BoolVar(&o.LatencyTests, "latency-tests", false, "measure real-time latency: the latencytests resource")
 	flag.StringVar(&o.PodCIDR, "pod-cidr", "", "pod address range of the cluster (control plane node)")
 	flag.StringVar(&o.PodNetwork, "pod-network", nodeapi.PodNetworkVXLAN, "how pod traffic crosses between nodes: vxlan, host-gw on a plain layer-2 network, or none when a CNI package provides it")
 	flag.StringVar(&o.ServiceCIDR, "service-cidr", "", "service address range of the cluster (control plane node)")

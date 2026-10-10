@@ -84,6 +84,7 @@ func boot() error {
 		printNodeKubeconfig()
 	}
 	serveControl(func() { reconfigure(node, cfg) })
+	forgetResourceAssignments()
 	startServices(services, cfg)
 	if controlPlane {
 		go applyAddons(generation(), cfg, node)

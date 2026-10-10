@@ -10,7 +10,8 @@ WORK=${WORK:-/work}
 OUT=${KUBEROOT_OUT:-$ROOT/out}/$ARCH
 DRBD_VERSION=$(cat "$ROOT/kernel/DRBD_VERSION")
 case "$ARCH" in amd64) KARCH=x86_64 ;; arm64) KARCH=arm64 ;; *) echo "unknown arch $ARCH" >&2; exit 1 ;; esac
-O="$WORK/build-$KARCH"
+. "$ROOT/scripts/kernel-flavour.sh"
+O=$(kernel_build_dir "$WORK" "$KARCH")
 KREL=$(cat "$O/include/config/kernel.release")
 
 # DRBD adapts to the kernel with coccinelle patches.
@@ -23,7 +24,7 @@ if [ ! -d "drbd-$DRBD_VERSION" ]; then
 fi
 cd "drbd-$DRBD_VERSION"
 make -s clean >/dev/null 2>&1 || true
-make -s -j"$(nproc)" KDIR="$O" ARCH=$KARCH module
+make -s -j"${JOBS:-$(nproc)}" KDIR="$O" ARCH=$KARCH module
 
 dst="$OUT/modules/$KREL/extra"
 rm -rf "$OUT/modules"
