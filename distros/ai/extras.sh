@@ -5,3 +5,7 @@ install -m 0755 "$OUT/llama-server-$LLAMA_CPP_VERSION" $r/usr/bin/llama-server
 # The NVIDIA driver, which build-nvidia.sh built: signed modules, firmware,
 # the CUDA driver library, NVML and nvidia-smi.
 cp -a "$OUT/nvidia/." $r/
+# llama-server for NVIDIA GPUs, where build-llama-cuda.sh built one.
+if [ -f "$OUT/llama-server-cuda-$LLAMA_CPP_VERSION" ]; then
+  install -m 0755 "$OUT/llama-server-cuda-$LLAMA_CPP_VERSION" $r/usr/bin/llama-server-cuda
+fi
