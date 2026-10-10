@@ -70,7 +70,7 @@ func (c *Controller) Run(ctx context.Context) error {
 	defer c.dnsmasq.Stop()
 	defer c.bird.Stop()
 
-	c.trial.load(c.confirmedFile())
+	c.trial.Load(c.confirmedFile())
 	factory := dynamicinformer.NewDynamicSharedInformerFactory(c.Client, 10*time.Minute)
 	poke := make(chan struct{}, 1)
 	notify := func(any) {
@@ -94,8 +94,8 @@ func (c *Controller) Run(ctx context.Context) error {
 		c.reconcile(ctx)
 		// Every half minute, and right at the end of a trial.
 		wait := 30 * time.Second
-		if !c.trial.deadline.IsZero() {
-			wait = min(wait, time.Until(c.trial.deadline)+time.Second)
+		if !c.trial.Deadline.IsZero() {
+			wait = min(wait, time.Until(c.trial.Deadline)+time.Second)
 		}
 		select {
 		case <-ctx.Done():
@@ -199,7 +199,7 @@ func (c *Controller) reconcile(ctx context.Context) {
 	rev := Revision(candidate)
 	ok, running, changed := c.trial.decide(candidate, rev, guard, time.Now())
 	if changed {
-		if err := c.trial.save(c.confirmedFile()); err != nil {
+		if err := c.trial.Save(c.confirmedFile()); err != nil {
 			klog.Errorf("keep the confirmed configuration: %v", err)
 		}
 	}
@@ -395,10 +395,10 @@ func (c *Controller) report(ctx context.Context, l listed, problem string, apply
 			extra["activeLeases"], extra["leases"] = int64(len(mine)), items
 		}
 	case "Safeguard":
-		extra["running"], extra["confirmed"], extra["rolledBack"] = c.trial.confirmedRev, c.trial.confirmedRev, c.trial.rolledBack
-		if c.trial.pending != "" {
-			extra["running"], extra["pending"] = c.trial.pending, c.trial.pending
-			extra["deadline"] = c.trial.deadline.UTC().Format(time.RFC3339)
+		extra["running"], extra["confirmed"], extra["rolledBack"] = c.trial.ConfirmedRev, c.trial.ConfirmedRev, c.trial.RolledBack
+		if c.trial.Pending != "" {
+			extra["running"], extra["pending"] = c.trial.Pending, c.trial.Pending
+			extra["deadline"] = c.trial.Deadline.UTC().Format(time.RFC3339)
 		} else {
 			extra["pending"], extra["deadline"] = nil, nil
 		}
